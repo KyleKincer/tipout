@@ -1153,8 +1153,8 @@ export default function ReportsPage() {
     <div>
       <div className="sm:flex sm:items-center">
         <div className="sm:flex-auto">
-          <h1 className="text-2xl font-semibold text-gray-900">Reports</h1>
-          <p className="mt-2 text-sm text-gray-700">
+          <h1 className="text-2xl font-semibold text-[var(--foreground)]">Reports</h1>
+          <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
             View and analyze tipout data.
           </p>
         </div>
@@ -1172,24 +1172,24 @@ export default function ReportsPage() {
       </div>
 
       {error && (
-        <div className="mt-4 rounded-md bg-red-50 p-4">
+        <div className="mt-4 rounded-md bg-red-50 dark:bg-red-900/50 p-4">
           <div className="flex">
             <div className="ml-3">
-              <h3 className="text-sm font-medium text-red-800">{error}</h3>
+              <h3 className="text-sm font-medium text-red-800 dark:text-red-200">{error}</h3>
             </div>
           </div>
         </div>
       )}
 
-      <div className="mt-4 bg-white shadow sm:rounded-lg">
+      <div className="mt-4 bg-[var(--background)] shadow sm:rounded-lg">
         <div className="px-4 py-5 sm:p-6">
           <div className="flex items-center space-x-4 mb-4">
-            <span className="text-sm text-gray-700">Single Date</span>
+            <span className="text-sm text-gray-700 dark:text-gray-300">Single Date</span>
             <button
               type="button"
               onClick={() => setIsDateRange(!isDateRange)}
               className={`${
-                isDateRange ? 'bg-indigo-600' : 'bg-gray-200'
+                isDateRange ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-700'
               } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2`}
             >
               <span
@@ -1198,11 +1198,11 @@ export default function ReportsPage() {
                 } pointer-events-none relative inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
               />
             </button>
-            <span className="text-sm text-gray-700">Date Range</span>
+            <span className="text-sm text-gray-700 dark:text-gray-300">Date Range</span>
           </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div>
-              <label htmlFor="startDate" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="startDate" className="block text-sm font-medium text-[var(--foreground)]">
                 {isDateRange ? 'Start Date' : 'Date'}
               </label>
               <div className="mt-1">
@@ -1211,13 +1211,13 @@ export default function ReportsPage() {
                   id="startDate"
                   value={filters.startDate}
                   onChange={(e) => setFilters({ ...filters, startDate: e.target.value })}
-                  className="block w-full rounded-md border-gray-300 shadow-sm px-3 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  className="block w-full rounded-md border-gray-300 shadow-sm px-3 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white"
                 />
               </div>
             </div>
             {isDateRange && (
               <div>
-                <label htmlFor="endDate" className="block text-sm font-medium text-gray-700">
+                <label htmlFor="endDate" className="block text-sm font-medium text-[var(--foreground)]">
                   End Date
                 </label>
                 <div className="mt-1">
@@ -1226,13 +1226,13 @@ export default function ReportsPage() {
                     id="endDate"
                     value={filters.endDate}
                     onChange={(e) => setFilters({ ...filters, endDate: e.target.value })}
-                    className="block w-full rounded-md border-gray-300 shadow-sm px-3 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    className="block w-full rounded-md border-gray-300 shadow-sm px-3 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white"
                   />
                 </div>
               </div>
             )}
             <div>
-              <label htmlFor="employeeId" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="employeeId" className="block text-sm font-medium text-[var(--foreground)]">
                 Employee
               </label>
               <div className="mt-1">
@@ -1240,7 +1240,7 @@ export default function ReportsPage() {
                   id="employeeId"
                   value={filters.employeeId}
                   onChange={(e) => setFilters({ ...filters, employeeId: e.target.value })}
-                  className="block w-full rounded-md border-gray-300 shadow-sm px-3 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  className="block w-full rounded-md border-gray-300 shadow-sm px-3 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white"
                 >
                   <option value="">All employees</option>
                   {employees.map((employee) => (
@@ -1258,7 +1258,7 @@ export default function ReportsPage() {
       {shifts.length === 0 ? (
         <div className="mt-8 text-center py-12">
           <svg
-            className="mx-auto h-12 w-12 text-gray-400"
+            className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -1271,8 +1271,8 @@ export default function ReportsPage() {
               d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
             />
           </svg>
-          <h3 className="mt-2 text-sm font-semibold text-gray-900">No data available</h3>
-          <p className="mt-1 text-sm text-gray-500">
+          <h3 className="mt-2 text-sm font-semibold text-[var(--foreground)]">No data available</h3>
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
             {filters.startDate === filters.endDate
               ? `No shifts were found for ${format(new Date(filters.startDate), 'MMMM d, yyyy')}.`
               : `No shifts were found between ${format(new Date(filters.startDate), 'MMMM d, yyyy')} and ${format(new Date(filters.endDate), 'MMMM d, yyyy')}.`}
@@ -1290,7 +1290,7 @@ export default function ReportsPage() {
       ) : (
         <>
           <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="bg-white overflow-hidden shadow rounded-lg">
+            <div className="bg-[var(--background)] overflow-hidden shadow rounded-lg">
               <div className="p-5">
                 <div className="flex items-center">
                   <div className="flex-shrink-0">
@@ -1302,15 +1302,15 @@ export default function ReportsPage() {
                   </div>
                   <div className="ml-5 w-0 flex-1">
                     <dl>
-                      <dt className="text-sm font-medium text-gray-500 truncate">Total Shifts</dt>
-                      <dd className="text-lg font-medium text-gray-900">{summary.totalShifts}</dd>
+                      <dt className="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">Total Shifts</dt>
+                      <dd className="text-lg font-medium text-[var(--foreground)]">{summary.totalShifts}</dd>
                     </dl>
                   </div>
                 </div>
               </div>
             </div>
 
-            <div className="bg-white overflow-hidden shadow rounded-lg">
+            <div className="bg-[var(--background)] overflow-hidden shadow rounded-lg">
               <div className="p-5">
                 <div className="flex items-center">
                   <div className="flex-shrink-0">
@@ -1322,8 +1322,8 @@ export default function ReportsPage() {
                   </div>
                   <div className="ml-5 w-0 flex-1">
                     <dl>
-                      <dt className="text-sm font-medium text-gray-500 truncate">Total Tips</dt>
-                      <dd className="text-lg font-medium text-gray-900">
+                      <dt className="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">Total Tips</dt>
+                      <dd className="text-lg font-medium text-[var(--foreground)]">
                         ${(summary.totalCashTips + summary.totalCreditTips).toFixed(2)}
                       </dd>
                     </dl>
@@ -1332,7 +1332,7 @@ export default function ReportsPage() {
               </div>
             </div>
 
-            <div className="bg-white overflow-hidden shadow rounded-lg">
+            <div className="bg-[var(--background)] overflow-hidden shadow rounded-lg">
               <div className="p-5">
                 <div className="flex items-center">
                   <div className="flex-shrink-0">
@@ -1344,8 +1344,8 @@ export default function ReportsPage() {
                   </div>
                   <div className="ml-5 w-0 flex-1">
                     <dl>
-                      <dt className="text-sm font-medium text-gray-500 truncate">Total Tipouts</dt>
-                      <dd className="text-lg font-medium text-gray-900">
+                      <dt className="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">Total Tipouts</dt>
+                      <dd className="text-lg font-medium text-[var(--foreground)]">
                         ${(summary.totalBarTipout + summary.totalHostTipout + summary.totalSaTipout).toFixed(2)}
                       </dd>
                     </dl>
@@ -1354,7 +1354,7 @@ export default function ReportsPage() {
               </div>
             </div>
 
-            <div className="bg-white overflow-hidden shadow rounded-lg">
+            <div className="bg-[var(--background)] overflow-hidden shadow rounded-lg">
               <div className="p-5">
                 <div className="flex items-center">
                   <div className="flex-shrink-0">
@@ -1366,8 +1366,8 @@ export default function ReportsPage() {
                   </div>
                   <div className="ml-5 w-0 flex-1">
                     <dl>
-                      <dt className="text-sm font-medium text-gray-500 truncate">Total Hours</dt>
-                      <dd className="text-lg font-medium text-gray-900">{summary.totalHours.toFixed(1)}</dd>
+                      <dt className="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">Total Hours</dt>
+                      <dd className="text-lg font-medium text-[var(--foreground)]">{summary.totalHours.toFixed(1)}</dd>
                     </dl>
                   </div>
                 </div>
@@ -1375,41 +1375,41 @@ export default function ReportsPage() {
             </div>
           </div>
 
-          <div className="mt-8 bg-white shadow sm:rounded-lg">
+          <div className="mt-8 bg-[var(--background)] shadow sm:rounded-lg">
             <div className="px-4 py-5 sm:p-6">
-              <h3 className="text-lg font-medium leading-6 text-gray-900">Tips Per Hour Summary</h3>
+              <h3 className="text-lg font-medium leading-6 text-[var(--foreground)]">Tips Per Hour Summary</h3>
               <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
-                  <h4 className="text-sm font-medium text-gray-500">Bar</h4>
+                  <h4 className="text-sm font-medium text-gray-500 dark:text-gray-400">Bar</h4>
                   <dl className="mt-2 grid grid-cols-2 gap-4">
                     <div>
-                      <dt className="text-sm text-gray-500">Cash Tips/Hour</dt>
-                      <dd className="text-lg font-medium text-gray-900">${summary.barCashTipsPerHour.toFixed(2)}</dd>
+                      <dt className="text-sm text-gray-500 dark:text-gray-400">Cash Tips/Hour</dt>
+                      <dd className="text-lg font-medium text-[var(--foreground)]">${summary.barCashTipsPerHour.toFixed(2)}</dd>
                     </div>
                     <div>
-                      <dt className="text-sm text-gray-500">Credit Tips/Hour</dt>
-                      <dd className="text-lg font-medium text-gray-900">${summary.barCreditTipsPerHour.toFixed(2)}</dd>
+                      <dt className="text-sm text-gray-500 dark:text-gray-400">Credit Tips/Hour</dt>
+                      <dd className="text-lg font-medium text-[var(--foreground)]">${summary.barCreditTipsPerHour.toFixed(2)}</dd>
                     </div>
                     <div>
-                      <dt className="text-sm text-gray-500">Total Tips/Hour</dt>
-                      <dd className="text-lg font-medium text-gray-900">${summary.barTipsPerHour.toFixed(2)}</dd>
+                      <dt className="text-sm text-gray-500 dark:text-gray-400">Total Tips/Hour</dt>
+                      <dd className="text-lg font-medium text-[var(--foreground)]">${summary.barTipsPerHour.toFixed(2)}</dd>
                     </div>
                   </dl>
                 </div>
                 <div>
-                  <h4 className="text-sm font-medium text-gray-500">Servers</h4>
+                  <h4 className="text-sm font-medium text-gray-500 dark:text-gray-400">Servers</h4>
                   <dl className="mt-2 grid grid-cols-2 gap-4">
                     <div>
-                      <dt className="text-sm text-gray-500">Cash Tips/Hour</dt>
-                      <dd className="text-lg font-medium text-gray-900">${summary.serverCashTipsPerHour.toFixed(2)}</dd>
+                      <dt className="text-sm text-gray-500 dark:text-gray-400">Cash Tips/Hour</dt>
+                      <dd className="text-lg font-medium text-[var(--foreground)]">${summary.serverCashTipsPerHour.toFixed(2)}</dd>
                     </div>
                     <div>
-                      <dt className="text-sm text-gray-500">Credit Tips/Hour</dt>
-                      <dd className="text-lg font-medium text-gray-900">${summary.serverCreditTipsPerHour.toFixed(2)}</dd>
+                      <dt className="text-sm text-gray-500 dark:text-gray-400">Credit Tips/Hour</dt>
+                      <dd className="text-lg font-medium text-[var(--foreground)]">${summary.serverCreditTipsPerHour.toFixed(2)}</dd>
                     </div>
                     <div>
-                      <dt className="text-sm text-gray-500">Total Tips/Hour</dt>
-                      <dd className="text-lg font-medium text-gray-900">${summary.serverTipsPerHour.toFixed(2)}</dd>
+                      <dt className="text-sm text-gray-500 dark:text-gray-400">Total Tips/Hour</dt>
+                      <dd className="text-lg font-medium text-[var(--foreground)]">${summary.serverTipsPerHour.toFixed(2)}</dd>
                     </div>
                   </dl>
                 </div>
@@ -1421,84 +1421,84 @@ export default function ReportsPage() {
             <div className="-mx-4 -my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
               <div className="inline-block min-w-full py-2 align-middle sm:px-6 lg:px-8">
                 <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 sm:rounded-lg">
-                  <table className="min-w-full divide-y divide-gray-300">
-                    <thead className="bg-gray-50">
+                  <table className="min-w-full divide-y divide-gray-300 dark:divide-gray-700">
+                    <thead className="bg-gray-50 dark:bg-gray-800">
                       <tr>
-                        <th scope="col" className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 sm:pl-6">
+                        <th scope="col" className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 dark:text-white sm:pl-6">
                           Employee
                         </th>
-                        <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
+                        <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
                           Role
                         </th>
-                        <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
+                        <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
                           Hours
                         </th>
-                        <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
+                        <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
                           Cash Tips
                         </th>
-                        <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
+                        <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
                           Credit Tips
                         </th>
-                        <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
+                        <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
                           Bar Tipout
                         </th>
-                        <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
+                        <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
                           Host Tipout
                         </th>
-                        <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
+                        <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
                           SA Tipout
                         </th>
-                        <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
+                        <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
                           Payroll Tips
                         </th>
-                        <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
+                        <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
                           Total Tips/Hour
                         </th>
-                        <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
+                        <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
                           Base Pay Rate
                         </th>
-                        <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
+                        <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
                           Total $/Hour
                         </th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-200 bg-white">
+                    <tbody className="divide-y divide-gray-200 bg-white dark:bg-gray-900 dark:divide-gray-700">
                       {employeeRoleSummaries.map((summary) => (
                         <tr key={`${summary.employeeId}-${summary.roleName}`}>
-                          <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-gray-900 sm:pl-6">
+                          <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-[var(--foreground)] sm:pl-6">
                             {summary.employeeName}
                           </td>
-                          <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                          <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
                             {summary.roleName}
                           </td>
-                          <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                          <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
                             {summary.totalHours.toFixed(1)}
                           </td>
-                          <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                          <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
                             ${summary.totalCashTips.toFixed(2)}
                           </td>
-                          <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                          <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
                             ${summary.totalCreditTips.toFixed(2)}
                           </td>
-                          <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                          <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
                             ${summary.totalBarTipout.toFixed(2)}
                           </td>
-                          <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                          <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
                             ${summary.totalHostTipout.toFixed(2)}
                           </td>
-                          <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                          <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
                             ${summary.totalSaTipout.toFixed(2)}
                           </td>
-                          <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                          <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
                             ${summary.totalPayrollTips !== undefined ? summary.totalPayrollTips.toFixed(2) : 'N/A'}
                           </td>
-                          <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                          <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
                             ${summary.totalTipsPerHour.toFixed(2)}
                           </td>
-                          <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                          <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
                             ${summary.basePayRate.toFixed(2)}
                           </td>
-                          <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 font-medium">
+                          <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400 font-medium">
                             ${(summary.totalTipsPerHour + summary.basePayRate).toFixed(2)}
                           </td>
                         </tr>
@@ -1511,29 +1511,39 @@ export default function ReportsPage() {
           </div>
 
           <div className="mt-8">
-            <TipoutBreakdownChart />
+            <div className="bg-[var(--background)] p-6 rounded-lg shadow">
+              <TipoutBreakdownChart />
+            </div>
           </div>
 
           <div className="mt-8">
-            <TipoutPerHourChart />
+            <div className="bg-[var(--background)] p-6 rounded-lg shadow">
+              <TipoutPerHourChart />
+            </div>
           </div>
 
           <div className="mt-8">
-            <ServerTipFlowChart />
+            <div className="bg-[var(--background)] p-6 rounded-lg shadow">
+              <ServerTipFlowChart />
+            </div>
           </div>
 
           <div className="mt-8">
-            <TipoutRatesChart />
+            <div className="bg-[var(--background)] p-6 rounded-lg shadow">
+              <TipoutRatesChart />
+            </div>
           </div>
 
           <div className="mt-8">
-            <div className="bg-white p-6 rounded-lg shadow">
+            <div className="bg-[var(--background)] p-6 rounded-lg shadow">
               <TipoutContributionChart />
             </div>
           </div>
 
           <div className="mt-8">
-            <TipoutCalculationExplainer />
+            <div className="bg-[var(--background)] p-6 rounded-lg shadow">
+              <TipoutCalculationExplainer />
+            </div>
           </div>
         </>
       )}
@@ -1543,63 +1553,63 @@ export default function ReportsPage() {
         <div className="mt-16">
           <div className="sm:flex sm:items-center mb-6">
             <div className="sm:flex-auto">
-              <h2 className="text-xl font-semibold text-gray-900">Visual Tip Distribution</h2>
-              <p className="mt-2 text-sm text-gray-700">
+              <h2 className="text-xl font-semibold text-[var(--foreground)]">Visual Tip Distribution</h2>
+              <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
                 Visual breakdown of where tips go and how they're distributed.
               </p>
             </div>
           </div>
           
           <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
-            <div className="bg-white p-6 rounded-lg shadow">
+            <div className="bg-[var(--background)] p-6 rounded-lg shadow">
               <TipoutBreakdownChart />
             </div>
             
-            <div className="bg-white p-6 rounded-lg shadow">
+            <div className="bg-[var(--background)] p-6 rounded-lg shadow">
               <TipoutPerHourChart />
             </div>
           </div>
           
           <div className="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-2">
-            <div className="bg-white p-6 rounded-lg shadow">
+            <div className="bg-[var(--background)] p-6 rounded-lg shadow">
               <ServerTipFlowChart />
             </div>
             
-            <div className="bg-white p-6 rounded-lg shadow">
+            <div className="bg-[var(--background)] p-6 rounded-lg shadow">
               <TipoutRatesChart />
             </div>
           </div>
           
-          <div className="mt-8 p-6 bg-gray-50 rounded-lg border border-gray-200">
-            <h3 className="text-lg font-medium leading-6 text-gray-900 mb-4">Understanding Your Tipouts</h3>
+          <div className="mt-8 p-6 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+            <h3 className="text-lg font-medium leading-6 text-[var(--foreground)] mb-4">Understanding Your Tipouts</h3>
             <div className="space-y-4">
               <div>
-                <h4 className="text-sm font-medium text-gray-700">Bar Tipout</h4>
-                <p className="text-sm text-gray-600">
+                <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">Bar Tipout</h4>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
                   Bar tipout is calculated as a percentage of your liquor sales. 
                   It goes to bartenders who prepare drinks for your tables.
                 </p>
               </div>
               
               <div>
-                <h4 className="text-sm font-medium text-gray-700">Host Tipout</h4>
-                <p className="text-sm text-gray-600">
+                <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">Host Tipout</h4>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
                   Host tipout is calculated as a percentage of your total tips. 
                   It compensates hosts who seat and organize tables.
                 </p>
               </div>
               
               <div>
-                <h4 className="text-sm font-medium text-gray-700">SA (Server Assistant) Tipout</h4>
-                <p className="text-sm text-gray-600">
+                <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">SA (Server Assistant) Tipout</h4>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
                   SA tipout is calculated as a percentage of your total tips. 
                   It goes to server assistants who help run food, bus tables, and support the floor.
                 </p>
               </div>
               
               <div>
-                <h4 className="text-sm font-medium text-gray-700">Credit Tips vs. Cash Tips</h4>
-                <p className="text-sm text-gray-600">
+                <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">Credit Tips vs. Cash Tips</h4>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
                   Credit tips appear on your paycheck with tipouts already deducted.
                   Cash tips are received directly and tipouts must be paid separately.
                 </p>

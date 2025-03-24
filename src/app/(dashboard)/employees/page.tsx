@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { PlusIcon } from '@heroicons/react/24/outline'
+import { PlusIcon, PencilIcon, TrashIcon } from '@heroicons/react/24/outline'
 
 type Employee = {
   id: string
@@ -14,7 +14,11 @@ export default function EmployeesPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isAddingEmployee, setIsAddingEmployee] = useState(false)
+  const [isEditingEmployee, setIsEditingEmployee] = useState(false)
+  const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null)
   const [newEmployeeName, setNewEmployeeName] = useState('')
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [employeeToDelete, setEmployeeToDelete] = useState<Employee | null>(null)
 
   useEffect(() => {
     fetchEmployees()
@@ -60,6 +64,59 @@ export default function EmployeesPage() {
     } catch (err) {
       setError('Failed to add employee')
       console.error('Error adding employee:', err)
+    }
+  }
+
+  const handleEditEmployee = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editingEmployee) return
+
+    try {
+      const response = await fetch(`/api/employees/${editingEmployee.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: editingEmployee.name,
+          active: editingEmployee.active,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to update employee')
+      }
+
+      const updatedEmployee = await response.json()
+      setEmployees(employees.map(emp => 
+        emp.id === updatedEmployee.id ? updatedEmployee : emp
+      ))
+      setIsEditingEmployee(false)
+      setEditingEmployee(null)
+    } catch (err) {
+      setError('Failed to update employee')
+      console.error('Error updating employee:', err)
+    }
+  }
+
+  const handleDeleteEmployee = async () => {
+    if (!employeeToDelete) return
+
+    try {
+      const response = await fetch(`/api/employees/${employeeToDelete.id}`, {
+        method: 'DELETE',
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to delete employee')
+      }
+
+      setEmployees(employees.filter(emp => emp.id !== employeeToDelete.id))
+      setShowDeleteConfirm(false)
+      setEmployeeToDelete(null)
+    } catch (err) {
+      setError('Failed to delete employee')
+      console.error('Error deleting employee:', err)
     }
   }
 
@@ -138,6 +195,95 @@ export default function EmployeesPage() {
         </div>
       )}
 
+      {isEditingEmployee && editingEmployee && (
+        <div className="mt-4 bg-white shadow sm:rounded-lg">
+          <div className="px-4 py-5 sm:p-6">
+            <form onSubmit={handleEditEmployee} className="space-y-4">
+              <div>
+                <label htmlFor="edit-name" className="block text-sm font-medium text-gray-700">
+                  Name
+                </label>
+                <div className="mt-1">
+                  <input
+                    type="text"
+                    name="edit-name"
+                    id="edit-name"
+                    value={editingEmployee.name}
+                    onChange={(e) => setEditingEmployee({ ...editingEmployee, name: e.target.value })}
+                    className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Status
+                </label>
+                <div className="mt-1">
+                  <select
+                    value={editingEmployee.active ? 'active' : 'inactive'}
+                    onChange={(e) => setEditingEmployee({ ...editingEmployee, active: e.target.value === 'active' })}
+                    className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  >
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                  </select>
+                </div>
+              </div>
+              <div className="flex justify-end space-x-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsEditingEmployee(false)
+                    setEditingEmployee(null)
+                  }}
+                  className="rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+                >
+                  Save
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showDeleteConfirm && employeeToDelete && (
+        <div className="mt-4 bg-white shadow sm:rounded-lg">
+          <div className="px-4 py-5 sm:p-6">
+            <h3 className="text-lg font-medium leading-6 text-gray-900">
+              Delete Employee
+            </h3>
+            <div className="mt-2 max-w-xl text-sm text-gray-500">
+              <p>Are you sure you want to delete {employeeToDelete.name}? This action cannot be undone.</p>
+            </div>
+            <div className="mt-5 flex justify-end space-x-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowDeleteConfirm(false)
+                  setEmployeeToDelete(null)
+                }}
+                className="rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteEmployee}
+                className="rounded-md bg-red-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="mt-8 flow-root">
         <div className="-mx-4 -my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
           <div className="inline-block min-w-full py-2 align-middle sm:px-6 lg:px-8">
@@ -150,6 +296,9 @@ export default function EmployeesPage() {
                     </th>
                     <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
                       Status
+                    </th>
+                    <th scope="col" className="relative py-3.5 pl-3 pr-4 sm:pr-6">
+                      <span className="sr-only">Actions</span>
                     </th>
                   </tr>
                 </thead>
@@ -167,6 +316,28 @@ export default function EmployeesPage() {
                         }`}>
                           {employee.active ? 'Active' : 'Inactive'}
                         </span>
+                      </td>
+                      <td className="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
+                        <button
+                          onClick={() => {
+                            setEditingEmployee(employee)
+                            setIsEditingEmployee(true)
+                          }}
+                          className="text-indigo-600 hover:text-indigo-900 mr-4"
+                        >
+                          <PencilIcon className="h-5 w-5" />
+                          <span className="sr-only">Edit</span>
+                        </button>
+                        <button
+                          onClick={() => {
+                            setEmployeeToDelete(employee)
+                            setShowDeleteConfirm(true)
+                          }}
+                          className="text-red-600 hover:text-red-900"
+                        >
+                          <TrashIcon className="h-5 w-5" />
+                          <span className="sr-only">Delete</span>
+                        </button>
                       </td>
                     </tr>
                   ))}

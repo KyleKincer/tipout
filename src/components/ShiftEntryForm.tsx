@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
+import { format } from 'date-fns'
 
 type Employee = {
   id: string
@@ -29,7 +30,12 @@ type ShiftFormData = {
   liquorSales: number
 }
 
-export default function ShiftEntryForm() {
+type ShiftEntryFormProps = {
+  initialData?: ShiftFormData
+  onSubmit?: (data: ShiftFormData) => Promise<void>
+}
+
+export default function ShiftEntryForm({ initialData, onSubmit }: ShiftEntryFormProps) {
   const [employees, setEmployees] = useState<Employee[]>([])
   const [roles, setRoles] = useState<Role[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -43,8 +49,8 @@ export default function ShiftEntryForm() {
     formState: { errors },
     reset,
   } = useForm<ShiftFormData>({
-    defaultValues: {
-      date: new Date().toISOString().split('T')[0],
+    defaultValues: initialData || {
+      date: format(new Date(), 'yyyy-MM-dd'),
     },
   })
 
@@ -92,24 +98,28 @@ export default function ShiftEntryForm() {
     fetchData()
   }, [])
 
-  const onSubmit = async (data: ShiftFormData) => {
+  const handleFormSubmit = async (data: ShiftFormData) => {
     setIsSubmitting(true)
     try {
-      const response = await fetch('/api/shifts', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(data),
-      })
+      if (onSubmit) {
+        await onSubmit(data)
+      } else {
+        const response = await fetch('/api/shifts', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(data),
+        })
 
-      if (!response.ok) {
-        throw new Error('Failed to save shift')
+        if (!response.ok) {
+          throw new Error('Failed to save shift')
+        }
+
+        const result = await response.json()
+        console.log('Shift saved:', result)
+        reset()
       }
-
-      const result = await response.json()
-      console.log('Shift saved:', result)
-      reset()
     } catch (error) {
       console.error('Error submitting shift:', error)
       setError('Failed to save shift')
@@ -148,7 +158,7 @@ export default function ShiftEntryForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+    <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-6">
       <div className="bg-white shadow-sm ring-1 ring-gray-900/5 sm:rounded-xl md:col-span-2">
         <div className="px-4 py-6 sm:p-8">
           <div className="grid max-w-2xl grid-cols-1 gap-x-6 gap-y-8 sm:grid-cols-6">
@@ -160,7 +170,7 @@ export default function ShiftEntryForm() {
                 <select
                   {...register('employeeId', { required: 'Employee is required' })}
                   id="employeeId"
-                  className="block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:max-w-xs sm:text-sm sm:leading-6"
+                  className="block w-full rounded-md border-0 py-1.5 px-3 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:max-w-xs sm:text-sm sm:leading-6"
                 >
                   <option value="">Select employee...</option>
                   {employees.map((employee) => (
@@ -183,7 +193,7 @@ export default function ShiftEntryForm() {
                 <select
                   {...register('roleId', { required: 'Role is required' })}
                   id="roleId"
-                  className="block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:max-w-xs sm:text-sm sm:leading-6"
+                  className="block w-full rounded-md border-0 py-1.5 px-3 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:max-w-xs sm:text-sm sm:leading-6"
                 >
                   <option value="">Select role...</option>
                   {roles.map((role) => (
@@ -207,7 +217,7 @@ export default function ShiftEntryForm() {
                   {...register('date', { required: 'Date is required' })}
                   type="date"
                   id="date"
-                  className="block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
+                  className="block w-full rounded-md border-0 py-1.5 px-3 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
                 />
                 {errors.date && (
                   <p className="mt-2 text-sm text-red-600">{errors.date.message}</p>
@@ -228,7 +238,7 @@ export default function ShiftEntryForm() {
                   type="number"
                   step="0.01"
                   id="hours"
-                  className="block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
+                  className="block w-full rounded-md border-0 py-1.5 px-3 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
                 />
                 {errors.hours && (
                   <p className="mt-2 text-sm text-red-600">{errors.hours.message}</p>
@@ -250,7 +260,7 @@ export default function ShiftEntryForm() {
                   step="0.01"
                   id="cashTips"
                   disabled={!isFieldRequired('cashTips')}
-                  className={`block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6 ${
+                  className={`block w-full rounded-md border-0 py-1.5 px-3 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6 ${
                     !isFieldRequired('cashTips') ? 'bg-gray-50 text-gray-500' : ''
                   }`}
                 />
@@ -274,7 +284,7 @@ export default function ShiftEntryForm() {
                   step="0.01"
                   id="creditTips"
                   disabled={!isFieldRequired('creditTips')}
-                  className={`block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6 ${
+                  className={`block w-full rounded-md border-0 py-1.5 px-3 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6 ${
                     !isFieldRequired('creditTips') ? 'bg-gray-50 text-gray-500' : ''
                   }`}
                 />
@@ -298,7 +308,7 @@ export default function ShiftEntryForm() {
                   step="0.01"
                   id="liquorSales"
                   disabled={!isFieldRequired('liquorSales')}
-                  className={`block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6 ${
+                  className={`block w-full rounded-md border-0 py-1.5 px-3 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6 ${
                     !isFieldRequired('liquorSales') ? 'bg-gray-50 text-gray-500' : ''
                   }`}
                 />

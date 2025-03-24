@@ -3,15 +3,15 @@ import { prisma } from '@/lib/prisma'
 
 export async function GET(
   request: NextRequest,
-  context: { params: { roleId: string } }
+  context: { params: { id: string } }
 ) {
   try {
-    // Get the roleId from params
-    const { roleId } = context.params;
+    // Get the id from params
+    const { id } = context.params;
     
-    const configurations = await prisma.roleConfiguration.findMany({
+    const configurations = await prisma.roleConfig.findMany({
       where: {
-        roleId,
+        roleId: id,
         effectiveTo: null, // Get current active configurations
       },
       orderBy: {
@@ -30,14 +30,14 @@ export async function GET(
 
 export async function POST(
   request: NextRequest,
-  context: { params: { roleId: string } }
+  context: { params: { id: string } }
 ) {
   try {
-    // Get the roleId from params
-    const { roleId } = context.params;
+    // Get the id from params
+    const { id } = context.params;
     
     const body = await request.json()
-    const { tipoutType, percentageRate } = body
+    const { tipoutType, percentageRate, receivesTipout, paysTipout, distributionGroup } = body
 
     if (!tipoutType || percentageRate === undefined) {
       return NextResponse.json(
@@ -47,9 +47,9 @@ export async function POST(
     }
 
     // End any existing configuration for this tipout type
-    await prisma.roleConfiguration.updateMany({
+    await prisma.roleConfig.updateMany({
       where: {
-        roleId,
+        roleId: id,
         tipoutType,
         effectiveTo: null,
       },
@@ -59,12 +59,15 @@ export async function POST(
     })
 
     // Create new configuration
-    const configuration = await prisma.roleConfiguration.create({
+    const configuration = await prisma.roleConfig.create({
       data: {
-        roleId,
+        roleId: id,
         tipoutType,
         percentageRate: parseFloat(percentageRate),
         effectiveFrom: new Date(),
+        receivesTipout: receivesTipout !== undefined ? receivesTipout : false,
+        paysTipout: paysTipout !== undefined ? paysTipout : true,
+        distributionGroup,
       },
     })
 
@@ -80,11 +83,11 @@ export async function POST(
 
 export async function DELETE(
   request: NextRequest,
-  context: { params: { roleId: string } }
+  context: { params: { id: string } }
 ) {
   try {
-    // Get the roleId from params
-    const { roleId } = context.params;
+    // Get the id from params
+    const { id } = context.params;
     
     // Get the tipout type from the request
     const { searchParams } = new URL(request.url);
@@ -98,9 +101,9 @@ export async function DELETE(
     }
     
     // End all configurations for this tipout type
-    await prisma.roleConfiguration.updateMany({
+    await prisma.roleConfig.updateMany({
       where: {
-        roleId,
+        roleId: id,
         tipoutType,
         effectiveTo: null,
       },

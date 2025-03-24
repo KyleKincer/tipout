@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { PlusIcon } from '@heroicons/react/24/outline'
+import { format } from 'date-fns'
 
 type Role = {
   id: string
@@ -116,7 +117,7 @@ export default function RolesPage() {
         if (role.id === roleId) {
           const updatedConfigs = role.configs.map(config => {
             if (config.tipoutType === tipoutType && config.effectiveTo === null) {
-              return { ...config, effectiveTo: new Date().toISOString() };
+              return { ...config, effectiveTo: format(new Date(), 'yyyy-MM-dd') };
             }
             return config;
           });
@@ -154,7 +155,7 @@ export default function RolesPage() {
         if (role.id === roleId) {
           const updatedConfigs = role.configs.map(config => {
             if (config.tipoutType === tipoutType && config.effectiveTo === null) {
-              return { ...config, effectiveTo: new Date().toISOString() };
+              return { ...config, effectiveTo: format(new Date(), 'yyyy-MM-dd') };
             }
             return config;
           });
@@ -243,6 +244,9 @@ export default function RolesPage() {
           <p className="mt-2 text-sm text-gray-700">
             A list of all roles and their tipout configurations.
           </p>
+          <p className="mt-1 text-sm text-gray-700">
+            Use the <span className="font-medium">Edit Role</span> button to access advanced configuration options including whether roles pay or receive tipouts.
+          </p>
         </div>
         <div className="mt-4 sm:ml-16 sm:mt-0 sm:flex-none">
           <button
@@ -281,7 +285,7 @@ export default function RolesPage() {
                     id="name"
                     value={newRole.name}
                     onChange={(e) => setNewRole({ ...newRole, name: e.target.value })}
-                    className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    className="block w-full rounded-md border-gray-300 shadow-sm px-3 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                     placeholder="Enter role name"
                   />
                 </div>
@@ -297,7 +301,7 @@ export default function RolesPage() {
                     id="basePayRate"
                     value={newRole.basePayRate}
                     onChange={(e) => setNewRole({ ...newRole, basePayRate: e.target.value })}
-                    className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    className="block w-full rounded-md border-gray-300 shadow-sm px-3 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                     placeholder="Enter base pay rate"
                     step="0.01"
                     min="0"
@@ -360,7 +364,7 @@ export default function RolesPage() {
                               type="number"
                               value={editingRole.basePayRate}
                               onChange={(e) => setEditingRole({ ...editingRole, basePayRate: e.target.value })}
-                              className="block w-24 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                              className="block w-24 rounded-md border-gray-300 shadow-sm px-3 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                               placeholder="Pay rate"
                               step="0.01"
                               min="0"
@@ -404,7 +408,7 @@ export default function RolesPage() {
                                   type="number"
                                   value={editingConfig.percentageRate}
                                   onChange={(e) => setEditingConfig({ ...editingConfig, percentageRate: e.target.value })}
-                                  className="block w-20 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                                  className="block w-20 rounded-md border-gray-300 shadow-sm px-3 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                                   placeholder="Rate %"
                                   step="0.01"
                                   min="0"
@@ -466,6 +470,12 @@ export default function RolesPage() {
                         )
                       })}
                       <td className="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
+                        <a
+                          href={`/roles/${role.id}/edit`}
+                          className="text-indigo-600 hover:text-indigo-900 mr-4"
+                        >
+                          Edit Role
+                        </a>
                         <button
                           onClick={() => handleDeleteRole(role.id)}
                           className="text-red-600 hover:text-red-900"

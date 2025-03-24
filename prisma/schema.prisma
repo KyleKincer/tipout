@@ -24,27 +24,15 @@ model Employee {
 }
 
 model Role {
-  id          String             @id @default(uuid())
-  name        String             @unique
-  basePayRate Decimal           @default(0)
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
+  id          String    @id @default(uuid())
+  name        String
+  basePayRate Decimal   @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
   shifts      Shift[]
-  configs     RoleConfiguration[]
-}
+  configs     RoleConfig[]
 
-model RoleConfiguration {
-  id                String   @id @default(uuid())
-  roleId           String
-  role             Role     @relation(fields: [roleId], references: [id])
-  tipoutType       String   // e.g., "bar", "host", "sa"
-  percentageRate   Decimal  @default(0)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-  effectiveFrom    DateTime @default(now())
-  effectiveTo      DateTime?
-
-  @@unique([roleId, tipoutType, effectiveFrom])
+  @@index([name])
 }
 
 model Shift {
@@ -58,13 +46,28 @@ model Shift {
   cashTips     Decimal  @default(0)
   creditTips   Decimal  @default(0)
   liquorSales  Decimal  @default(0)
-  barTipout    Decimal  @default(0)
-  hostTipout   Decimal  @default(0)
-  saTipout     Decimal  @default(0)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
   @@index([date])
   @@index([employeeId])
   @@index([roleId])
+}
+
+model RoleConfig {
+  id             String    @id @default(uuid())
+  roleId         String
+  tipoutType     String
+  percentageRate Decimal   @default(0)
+  effectiveFrom  DateTime  @default(now())
+  effectiveTo    DateTime?
+  receivesTipout Boolean   @default(false)
+  paysTipout     Boolean   @default(true)  
+  distributionGroup String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  role           Role      @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@index([roleId])
+  @@unique([roleId, tipoutType, effectiveFrom])
 }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
 import { format } from 'date-fns'
 import Link from 'next/link'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
@@ -63,7 +63,8 @@ const calculateTipouts = (shift: Shift, hasHost: boolean, hasSA: boolean) => {
   return { barTipout, hostTipout, saTipout }
 }
 
-export default function ShiftsPage() {
+// Create a new client component for the shifts content
+function ShiftsContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const pathname = usePathname()
@@ -447,5 +448,14 @@ export default function ShiftsPage() {
         </div>
       )}
     </div>
+  )
+}
+
+// Main page component
+export default function ShiftsPage() {
+  return (
+    <Suspense fallback={<LoadingSpinner />}>
+      <ShiftsContent />
+    </Suspense>
   )
 } 

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, Suspense } from 'react'
 import { format } from 'date-fns'
 import Link from 'next/link'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
@@ -99,7 +99,8 @@ type EmployeeRoleSummary = {
   totalPayrollTips?: number  // For debugging
 }
 
-export default function ReportsPage() {
+// Create a new client component for the reports content
+function ReportsContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const pathname = usePathname()
@@ -1612,5 +1613,14 @@ export default function ReportsPage() {
         </>
       )}
     </div>
+  )
+}
+
+// Main page component
+export default function ReportsPage() {
+  return (
+    <Suspense fallback={<LoadingSpinner />}>
+      <ReportsContent />
+    </Suspense>
   )
 } 

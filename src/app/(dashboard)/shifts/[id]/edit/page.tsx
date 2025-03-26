@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import ShiftEntryForm from '@/components/ShiftEntryForm'
 import { format } from 'date-fns'
 import { use } from 'react'
+import LoadingSpinner from '@/components/LoadingSpinner'
 
 type Employee = {
   id: string
@@ -134,7 +135,7 @@ export default function EditShiftPage({ params }: { params: Promise<{ id: string
   }
 
   if (isLoading) {
-    return <div>Loading...</div>
+    return <LoadingSpinner />
   }
 
   if (error) {

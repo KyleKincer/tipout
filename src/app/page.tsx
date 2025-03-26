@@ -35,9 +35,6 @@ export default function Home() {
           <h2 className="mx-auto max-w-2xl text-3xl font-bold tracking-tight text-[var(--foreground)] sm:text-4xl">
             Tipout Manager
           </h2>
-          <p className="mx-auto mt-6 max-w-xl text-lg leading-8 text-gray-600 dark:text-gray-400">
-            Streamline your restaurant&apos;s tipout calculations and management
-          </p>
           
           <div className="mx-auto mt-16 grid max-w-2xl grid-cols-1 gap-6 sm:grid-cols-2 lg:mx-0 lg:max-w-none lg:grid-cols-2 lg:gap-8">
             {features.map((feature) => (

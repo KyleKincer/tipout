@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { format } from 'date-fns'
 import Link from 'next/link'
+import { useSearchParams, useRouter, usePathname } from 'next/navigation'
+import LoadingSpinner from '@/components/LoadingSpinner'
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -98,19 +100,47 @@ type EmployeeRoleSummary = {
 }
 
 export default function ReportsPage() {
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  const pathname = usePathname()
   const [employees, setEmployees] = useState<Employee[]>([])
   const [shifts, setShifts] = useState<Shift[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [isFilterLoading, setIsFilterLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [filters, setFilters] = useState({
-    startDate: format(new Date(), 'yyyy-MM-dd'),
-    endDate: format(new Date(), 'yyyy-MM-dd'),
-    employeeId: '',
-  })
   const [isDateRange, setIsDateRange] = useState(false)
+  const [filters, setFilters] = useState(() => {
+    return {
+      startDate: searchParams.get('startDate') || format(new Date(), 'yyyy-MM-dd'),
+      endDate: searchParams.get('endDate') || format(new Date(), 'yyyy-MM-dd'),
+      employeeId: searchParams.get('employeeId') || '',
+    }
+  })
+
+  // Update filters when search params change
+  useEffect(() => {
+    setFilters({
+      startDate: searchParams.get('startDate') || format(new Date(), 'yyyy-MM-dd'),
+      endDate: searchParams.get('endDate') || format(new Date(), 'yyyy-MM-dd'),
+      employeeId: searchParams.get('employeeId') || '',
+    })
+  }, [searchParams])
+
+  // Update URL when filters change
+  useEffect(() => {
+    const params = new URLSearchParams()
+    
+    if (filters.startDate) params.set('startDate', filters.startDate)
+    if (filters.endDate) params.set('endDate', filters.endDate)
+    if (filters.employeeId) params.set('employeeId', filters.employeeId)
+
+    const newUrl = `${pathname}${params.toString() ? `?${params.toString()}` : ''}`
+    router.push(newUrl)
+  }, [filters, pathname, router])
 
   const fetchShifts = useCallback(async () => {
     try {
+      setIsFilterLoading(true)
       const queryParams = new URLSearchParams({
         startDate: filters.startDate,
         endDate: isDateRange ? filters.endDate : filters.startDate,
@@ -128,6 +158,7 @@ export default function ReportsPage() {
       console.error('Error loading shifts:', err)
     } finally {
       setIsLoading(false)
+      setIsFilterLoading(false)
     }
   }, [filters, isDateRange])
 
@@ -606,7 +637,7 @@ export default function ReportsPage() {
   }
 
   if (isLoading) {
-    return <div>Loading...</div>
+    return <LoadingSpinner />
   }
 
   const summary = calculateSummary()
@@ -615,28 +646,25 @@ export default function ReportsPage() {
   // Chart components
   const TipoutBreakdownChart = () => {
     const data = {
-      labels: ['Server Tips', 'Bar Tipout', 'Host Tipout', 'SA Tipout'],
+      labels: ['Server Tips', 'Bar Tipout', 'Host Tipout'],
       datasets: [
         {
           label: 'Tip Distribution',
           data: [
             summary.totalCashTips + summary.totalCreditTips - 
-            (summary.totalBarTipout + summary.totalHostTipout + summary.totalSaTipout),
+            (summary.totalBarTipout + summary.totalHostTipout),
             summary.totalBarTipout,
             summary.totalHostTipout,
-            summary.totalSaTipout
           ],
           backgroundColor: [
-            'rgba(54, 162, 235, 0.7)',
-            'rgba(255, 99, 132, 0.7)',
-            'rgba(255, 206, 86, 0.7)',
-            'rgba(75, 192, 192, 0.7)',
+            'rgba(54, 162, 235, 0.7)',  // Blue for server tips
+            'rgba(255, 99, 132, 0.7)',  // Red for bar tipout
+            'rgba(255, 206, 86, 0.7)',  // Yellow for host tipout
           ],
           borderColor: [
             'rgba(54, 162, 235, 1)',
             'rgba(255, 99, 132, 1)',
             'rgba(255, 206, 86, 1)',
-            'rgba(75, 192, 192, 1)',
           ],
           borderWidth: 1,
         },
@@ -644,37 +672,46 @@ export default function ReportsPage() {
     }
 
     return (
-      <div className="h-64">
-        <h3 className="text-lg font-medium leading-6 text-gray-900 mb-4">Where Server Tips Go</h3>
-        <Doughnut
-          data={data}
-          options={{
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-              legend: {
-                position: 'right',
-                labels: {
-                  boxWidth: 15,
-                  padding: 15,
-                  font: {
-                    size: 12
+      <div className="h-full">
+        <h3 className="text-lg font-medium leading-6 text-[var(--foreground)] mb-4">Where Tips Go</h3>
+        <div className="h-[calc(100%-2rem)] flex justify-center">
+          <div className="w-full max-w-lg">
+            <Doughnut
+              data={data}
+              options={{
+                responsive: true,
+                maintainAspectRatio: true,
+                aspectRatio: 1.5,
+                plugins: {
+                  legend: {
+                    position: 'right',
+                    labels: {
+                      boxWidth: 15,
+                      padding: 15,
+                      color: 'var(--foreground)',
+                      font: {
+                        size: 12
+                      }
+                    }
+                  },
+                  tooltip: {
+                    titleColor: 'var(--foreground)',
+                    bodyColor: 'var(--foreground)',
+                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                    callbacks: {
+                      label: function(context) {
+                        const value = context.raw as number;
+                        const total = context.dataset.data.reduce((a, b) => (a as number) + (b as number), 0) as number;
+                        const percentage = Math.round((value / total) * 100);
+                        return `${context.label}: $${value.toFixed(2)} (${percentage}%)`;
+                      }
+                    }
                   }
-                }
-              },
-              tooltip: {
-                callbacks: {
-                  label: function(context) {
-                    const value = context.raw as number;
-                    const total = context.dataset.data.reduce((a, b) => (a as number) + (b as number), 0) as number;
-                    const percentage = Math.round((value / total) * 100);
-                    return `${context.label}: $${value.toFixed(2)} (${percentage}%)`;
-                  }
-                }
-              }
-            },
-          }}
-        />
+                },
+              }}
+            />
+          </div>
+        </div>
       </div>
     )
   }
@@ -705,9 +742,19 @@ export default function ReportsPage() {
       creditTipsPerHour: roleData[role].creditTipsPerHour / roleData[role].count,
     }))
 
+    // Sort roles by total tips per hour (descending)
+    averages.sort((a, b) => b.totalTipsPerHour - a.totalTipsPerHour);
+
     const data = {
       labels: averages.map(a => a.role),
       datasets: [
+        {
+          label: 'Total Tips/Hour',
+          data: averages.map(a => a.totalTipsPerHour),
+          backgroundColor: 'rgba(153, 102, 255, 0.7)',
+          borderColor: 'rgba(153, 102, 255, 1)',
+          borderWidth: 1,
+        },
         {
           label: 'Cash Tips/Hour',
           data: averages.map(a => a.cashTipsPerHour),
@@ -722,124 +769,176 @@ export default function ReportsPage() {
           borderColor: 'rgba(54, 162, 235, 1)',
           borderWidth: 1,
         },
-        {
-          label: 'Total Tips/Hour',
-          data: averages.map(a => a.totalTipsPerHour),
-          backgroundColor: 'rgba(153, 102, 255, 0.7)',
-          borderColor: 'rgba(153, 102, 255, 1)',
-          borderWidth: 1,
-        },
       ],
     }
 
     return (
-      <div className="h-64">
-        <h3 className="text-lg font-medium leading-6 text-gray-900 mb-4">Tips Per Hour By Role</h3>
-        <Bar
-          data={data}
-          options={{
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-              y: {
-                beginAtZero: true,
-                title: {
-                  display: true,
-                  text: '$ Per Hour'
+      <div className="h-full">
+        <h3 className="text-lg font-medium leading-6 text-[var(--foreground)] mb-4">Earnings Per Hour By Role</h3>
+        <div className="h-[calc(100%-2rem)]">
+          <Bar
+            data={data}
+            options={{
+              responsive: true,
+              maintainAspectRatio: true,
+              scales: {
+                y: {
+                  beginAtZero: true,
+                  grid: {
+                    color: 'rgba(255, 255, 255, 0.1)',
+                  },
+                  ticks: {
+                    color: 'var(--foreground)',
+                  },
+                  title: {
+                    display: true,
+                    text: '$ Per Hour',
+                    color: 'var(--foreground)',
+                  }
+                },
+                x: {
+                  grid: {
+                    color: 'rgba(255, 255, 255, 0.1)',
+                  },
+                  ticks: {
+                    color: 'var(--foreground)',
+                  }
                 }
-              }
-            },
-            plugins: {
-              tooltip: {
-                callbacks: {
-                  label: function(context) {
-                    return `${context.dataset.label}: $${context.parsed.y.toFixed(2)}`;
+              },
+              plugins: {
+                legend: {
+                  labels: {
+                    color: 'var(--foreground)',
+                    padding: 20,
+                  }
+                },
+                tooltip: {
+                  titleColor: 'var(--foreground)',
+                  bodyColor: 'var(--foreground)',
+                  backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                  padding: 12,
+                  callbacks: {
+                    label: function(context) {
+                      return `${context.dataset.label}: $${context.parsed.y.toFixed(2)}`;
+                    }
                   }
                 }
               }
-            }
-          }}
-        />
+            }}
+          />
+        </div>
       </div>
     )
   }
 
-  const ServerTipFlowChart = () => {
-    // For servers only
-    const serverSummaries = employeeRoleSummaries.filter(summary => {
-      return summary.totalBarTipout < 0; // Servers pay tipout
-    });
-
-    if (serverSummaries.length === 0) {
-      return null;
-    }
-
-    const serverData = serverSummaries.map(server => ({
-      name: server.employeeName,
-      grossTips: server.totalCashTips + server.totalCreditTips,
-      netTips: server.totalCashTips + server.totalCreditTips + server.totalBarTipout + server.totalHostTipout + server.totalSaTipout,
-      tipouts: Math.abs(server.totalBarTipout + server.totalHostTipout + server.totalSaTipout),
-    }));
-
+  const TipoutContributionChart = () => {
+    // Group tipout data by employee
+    const employeeTipouts = employeeRoleSummaries.reduce((acc, summary) => {
+      if (!acc[summary.employeeName]) {
+        acc[summary.employeeName] = {
+          paid: 0,
+          received: 0
+        };
+      }
+      
+      // Calculate total tipout paid (negative values mean paying out)
+      const tipoutPaid = Math.min(0, summary.totalBarTipout + summary.totalHostTipout + summary.totalSaTipout);
+      
+      // Calculate total tipout received (positive values mean receiving)
+      const tipoutReceived = Math.max(0, summary.totalBarTipout + summary.totalHostTipout + summary.totalSaTipout);
+      
+      acc[summary.employeeName].paid += Math.abs(tipoutPaid);
+      acc[summary.employeeName].received += tipoutReceived;
+      
+      return acc;
+    }, {} as Record<string, { paid: number, received: number }>);
+    
+    const employees = Object.keys(employeeTipouts);
+    
+    // Sort employees by the amount they pay into the pool (descending)
+    employees.sort((a, b) => employeeTipouts[b].paid - employeeTipouts[a].paid);
+    
+    // Only include employees with significant tipout activity
+    const significantEmployees = employees.filter(emp => 
+      employeeTipouts[emp].paid > 0 || employeeTipouts[emp].received > 0
+    ).slice(0, 10); // Limit to top 10 for readability
+    
     const data = {
-      labels: serverData.map(s => s.name),
+      labels: significantEmployees,
       datasets: [
         {
-          label: 'Gross Tips',
-          data: serverData.map(s => s.grossTips),
-          backgroundColor: 'rgba(54, 162, 235, 0.7)',
-          borderColor: 'rgba(54, 162, 235, 1)',
-          borderWidth: 1,
-        },
-        {
-          label: 'Tipouts',
-          data: serverData.map(s => s.tipouts),
+          label: 'Tipout Paid Into Pool',
+          data: significantEmployees.map(emp => employeeTipouts[emp].paid),
           backgroundColor: 'rgba(255, 99, 132, 0.7)',
           borderColor: 'rgba(255, 99, 132, 1)',
           borderWidth: 1,
         },
         {
-          label: 'Net Tips',
-          data: serverData.map(s => s.netTips),
+          label: 'Tipout Received From Pool',
+          data: significantEmployees.map(emp => employeeTipouts[emp].received),
           backgroundColor: 'rgba(75, 192, 192, 0.7)',
           borderColor: 'rgba(75, 192, 192, 1)',
           borderWidth: 1,
         },
       ],
     };
-
+    
     return (
-      <div className="h-64">
-        <h3 className="text-lg font-medium leading-6 text-gray-900 mb-4">Server Tip Flow</h3>
-        <Bar
-          data={data}
-          options={{
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-              y: {
-                beginAtZero: true,
-                stacked: false,
-                title: {
-                  display: true,
-                  text: 'Dollars'
+      <div className="h-full">
+        <h3 className="text-lg font-medium leading-6 text-[var(--foreground)] mb-4">Tipout Flow by Employee</h3>
+        <div className="h-[calc(100%-2rem)]">
+          <Bar
+            data={data}
+            options={{
+              responsive: true,
+              maintainAspectRatio: true,
+              indexAxis: 'y',
+              scales: {
+                x: {
+                  beginAtZero: true,
+                  grid: {
+                    color: 'rgba(255, 255, 255, 0.1)',
+                  },
+                  ticks: {
+                    color: 'var(--foreground)',
+                  },
+                  title: {
+                    display: true,
+                    text: 'Amount ($)',
+                    color: 'var(--foreground)',
+                  }
+                },
+                y: {
+                  grid: {
+                    color: 'rgba(255, 255, 255, 0.1)',
+                  },
+                  ticks: {
+                    color: 'var(--foreground)',
+                  }
                 }
               },
-              x: {
-                stacked: false,
-              }
-            },
-            plugins: {
-              tooltip: {
-                callbacks: {
-                  label: function(context) {
-                    return `${context.dataset.label}: $${context.parsed.y.toFixed(2)}`;
+              plugins: {
+                legend: {
+                  labels: {
+                    color: 'var(--foreground)',
+                    padding: 20,
+                  }
+                },
+                tooltip: {
+                  titleColor: 'var(--foreground)',
+                  bodyColor: 'var(--foreground)',
+                  backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                  padding: 12,
+                  callbacks: {
+                    label: function(context) {
+                      return `${context.dataset.label}: $${context.parsed.x.toFixed(2)}`;
+                    }
                   }
                 }
               }
-            }
-          }}
-        />
+            }}
+          />
+        </div>
       </div>
     )
   }
@@ -903,116 +1002,60 @@ export default function ReportsPage() {
     };
 
     return (
-      <div className="h-64">
-        <h3 className="text-lg font-medium leading-6 text-gray-900 mb-4">Tipout Rates By Role</h3>
-        <Bar
-          data={data}
-          options={{
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-              y: {
-                beginAtZero: true,
-                title: {
-                  display: true,
-                  text: 'Percentage (%)'
+      <div className="h-full">
+        <h3 className="text-lg font-medium leading-6 text-[var(--foreground)] mb-4">Tipout Rates By Role</h3>
+        <div className="h-[calc(100%-2rem)]">
+          <Bar
+            data={data}
+            options={{
+              responsive: true,
+              maintainAspectRatio: true,
+              scales: {
+                y: {
+                  beginAtZero: true,
+                  grid: {
+                    color: 'rgba(255, 255, 255, 0.1)',
+                  },
+                  ticks: {
+                    color: 'var(--foreground)',
+                  },
+                  title: {
+                    display: true,
+                    text: 'Percentage (%)',
+                    color: 'var(--foreground)',
+                  }
+                },
+                x: {
+                  grid: {
+                    color: 'rgba(255, 255, 255, 0.1)',
+                  },
+                  ticks: {
+                    color: 'var(--foreground)',
+                  }
                 }
-              }
-            },
-            plugins: {
-              tooltip: {
-                callbacks: {
-                  label: function(context) {
-                    return `${context.dataset.label}: ${context.parsed.y}%`;
+              },
+              plugins: {
+                legend: {
+                  labels: {
+                    color: 'var(--foreground)',
+                    padding: 20,
+                  }
+                },
+                tooltip: {
+                  titleColor: 'var(--foreground)',
+                  bodyColor: 'var(--foreground)',
+                  backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                  padding: 12,
+                  callbacks: {
+                    label: function(context) {
+                      return `${context.dataset.label}: ${context.parsed.y}%`;
+                    }
                   }
                 }
               }
-            }
-          }}
-        />
-      </div>
-    )
-  }
-
-  const TipoutContributionChart = () => {
-    // Group tipout data by employee
-    const employeeTipouts = employeeRoleSummaries.reduce((acc, summary) => {
-      if (!acc[summary.employeeName]) {
-        acc[summary.employeeName] = {
-          paid: 0,
-          received: 0
-        };
-      }
-      
-      // Calculate total tipout paid (negative values mean paying out)
-      const tipoutPaid = Math.min(0, summary.totalBarTipout + summary.totalHostTipout + summary.totalSaTipout);
-      
-      // Calculate total tipout received (positive values mean receiving)
-      const tipoutReceived = Math.max(0, summary.totalBarTipout + summary.totalHostTipout + summary.totalSaTipout);
-      
-      acc[summary.employeeName].paid += Math.abs(tipoutPaid);
-      acc[summary.employeeName].received += tipoutReceived;
-      
-      return acc;
-    }, {} as Record<string, { paid: number, received: number }>);
-    
-    const employees = Object.keys(employeeTipouts);
-    
-    // Sort employees by the amount they pay into the pool (descending)
-    employees.sort((a, b) => employeeTipouts[b].paid - employeeTipouts[a].paid);
-    
-    const data = {
-      labels: employees,
-      datasets: [
-        {
-          label: 'Tipout Paid Into Pool',
-          data: employees.map(emp => employeeTipouts[emp].paid),
-          backgroundColor: 'rgba(255, 99, 132, 0.7)',
-          borderColor: 'rgba(255, 99, 132, 1)',
-          borderWidth: 1,
-        },
-        {
-          label: 'Tipout Received From Pool',
-          data: employees.map(emp => employeeTipouts[emp].received),
-          backgroundColor: 'rgba(75, 192, 192, 0.7)',
-          borderColor: 'rgba(75, 192, 192, 1)',
-          borderWidth: 1,
-        },
-      ],
-    };
-    
-    return (
-      <div className="h-80">
-        <h3 className="text-lg font-medium leading-6 text-gray-900 mb-4">Tipout Flow by Employee</h3>
-        <p className="text-sm text-gray-600 mb-4">
-          This chart shows how much each employee contributes to the tipout pool and how much they receive from it.
-        </p>
-        <Bar
-          data={data}
-          options={{
-            responsive: true,
-            maintainAspectRatio: false,
-            indexAxis: 'y', // Horizontal bar chart
-            scales: {
-              x: {
-                beginAtZero: true,
-                title: {
-                  display: true,
-                  text: 'Amount ($)'
-                }
-              }
-            },
-            plugins: {
-              tooltip: {
-                callbacks: {
-                  label: function(context) {
-                    return `${context.dataset.label}: $${context.parsed.x.toFixed(2)}`;
-                  }
-                }
-              }
-            }
-          }}
-        />
+            }}
+          />
+        </div>
       </div>
     )
   }
@@ -1158,17 +1201,6 @@ export default function ReportsPage() {
             View and analyze tipout data.
           </p>
         </div>
-        <div className="mt-4 sm:mt-0 sm:ml-16 sm:flex-none">
-          <a 
-            href="#tipout-explainer"
-            className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
-          >
-            <svg className="-ml-0.5 mr-1.5 h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clipRule="evenodd" />
-            </svg>
-            How Tipouts Work
-          </a>
-        </div>
       </div>
 
       {error && (
@@ -1211,7 +1243,8 @@ export default function ReportsPage() {
                   id="startDate"
                   value={filters.startDate}
                   onChange={(e) => setFilters({ ...filters, startDate: e.target.value })}
-                  className="block w-full rounded-md border-gray-300 shadow-sm px-3 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white"
+                  disabled={isFilterLoading}
+                  className="block w-full rounded-md border-gray-300 shadow-sm px-3 py-2 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed"
                 />
               </div>
             </div>
@@ -1226,7 +1259,8 @@ export default function ReportsPage() {
                     id="endDate"
                     value={filters.endDate}
                     onChange={(e) => setFilters({ ...filters, endDate: e.target.value })}
-                    className="block w-full rounded-md border-gray-300 shadow-sm px-3 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white"
+                    disabled={isFilterLoading}
+                    className="block w-full rounded-md border-gray-300 shadow-sm px-3 py-2 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed"
                   />
                 </div>
               </div>
@@ -1240,7 +1274,8 @@ export default function ReportsPage() {
                   id="employeeId"
                   value={filters.employeeId}
                   onChange={(e) => setFilters({ ...filters, employeeId: e.target.value })}
-                  className="block w-full rounded-md border-gray-300 shadow-sm px-3 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white"
+                  disabled={isFilterLoading}
+                  className="block w-full rounded-md border-gray-300 shadow-sm px-3 py-2 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <option value="">All employees</option>
                   {employees.map((employee) => (
@@ -1255,7 +1290,11 @@ export default function ReportsPage() {
         </div>
       </div>
 
-      {shifts.length === 0 ? (
+      {isFilterLoading ? (
+        <div className="mt-8 flex justify-center">
+          <LoadingSpinner />
+        </div>
+      ) : shifts.length === 0 ? (
         <div className="mt-8 text-center py-12">
           <svg
             className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500"
@@ -1290,7 +1329,7 @@ export default function ReportsPage() {
       ) : (
         <>
           <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="bg-[var(--background)] overflow-hidden shadow rounded-lg">
+            <div className="bg-white/50 dark:bg-gray-800/50 overflow-hidden shadow rounded-lg border border-gray-200 dark:border-gray-700 transition-all hover:shadow-md">
               <div className="p-5">
                 <div className="flex items-center">
                   <div className="flex-shrink-0">
@@ -1310,7 +1349,7 @@ export default function ReportsPage() {
               </div>
             </div>
 
-            <div className="bg-[var(--background)] overflow-hidden shadow rounded-lg">
+            <div className="bg-white/50 dark:bg-gray-800/50 overflow-hidden shadow rounded-lg border border-gray-200 dark:border-gray-700 transition-all hover:shadow-md">
               <div className="p-5">
                 <div className="flex items-center">
                   <div className="flex-shrink-0">
@@ -1332,7 +1371,7 @@ export default function ReportsPage() {
               </div>
             </div>
 
-            <div className="bg-[var(--background)] overflow-hidden shadow rounded-lg">
+            <div className="bg-white/50 dark:bg-gray-800/50 overflow-hidden shadow rounded-lg border border-gray-200 dark:border-gray-700 transition-all hover:shadow-md">
               <div className="p-5">
                 <div className="flex items-center">
                   <div className="flex-shrink-0">
@@ -1354,7 +1393,7 @@ export default function ReportsPage() {
               </div>
             </div>
 
-            <div className="bg-[var(--background)] overflow-hidden shadow rounded-lg">
+            <div className="bg-white/50 dark:bg-gray-800/50 overflow-hidden shadow rounded-lg border border-gray-200 dark:border-gray-700 transition-all hover:shadow-md">
               <div className="p-5">
                 <div className="flex items-center">
                   <div className="flex-shrink-0">
@@ -1375,248 +1414,176 @@ export default function ReportsPage() {
             </div>
           </div>
 
-          <div className="mt-8 bg-[var(--background)] shadow sm:rounded-lg">
-            <div className="px-4 py-5 sm:p-6">
-              <h3 className="text-lg font-medium leading-6 text-[var(--foreground)]">Tips Per Hour Summary</h3>
-              <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div>
-                  <h4 className="text-sm font-medium text-gray-500 dark:text-gray-400">Bar</h4>
-                  <dl className="mt-2 grid grid-cols-2 gap-4">
-                    <div>
-                      <dt className="text-sm text-gray-500 dark:text-gray-400">Cash Tips/Hour</dt>
-                      <dd className="text-lg font-medium text-[var(--foreground)]">${summary.barCashTipsPerHour.toFixed(2)}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-sm text-gray-500 dark:text-gray-400">Credit Tips/Hour</dt>
-                      <dd className="text-lg font-medium text-[var(--foreground)]">${summary.barCreditTipsPerHour.toFixed(2)}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-sm text-gray-500 dark:text-gray-400">Total Tips/Hour</dt>
-                      <dd className="text-lg font-medium text-[var(--foreground)]">${summary.barTipsPerHour.toFixed(2)}</dd>
-                    </div>
-                  </dl>
-                </div>
-                <div>
-                  <h4 className="text-sm font-medium text-gray-500 dark:text-gray-400">Servers</h4>
-                  <dl className="mt-2 grid grid-cols-2 gap-4">
-                    <div>
-                      <dt className="text-sm text-gray-500 dark:text-gray-400">Cash Tips/Hour</dt>
-                      <dd className="text-lg font-medium text-[var(--foreground)]">${summary.serverCashTipsPerHour.toFixed(2)}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-sm text-gray-500 dark:text-gray-400">Credit Tips/Hour</dt>
-                      <dd className="text-lg font-medium text-[var(--foreground)]">${summary.serverCreditTipsPerHour.toFixed(2)}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-sm text-gray-500 dark:text-gray-400">Total Tips/Hour</dt>
-                      <dd className="text-lg font-medium text-[var(--foreground)]">${summary.serverTipsPerHour.toFixed(2)}</dd>
-                    </div>
-                  </dl>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-8 flow-root">
-            <div className="-mx-4 -my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
-              <div className="inline-block min-w-full py-2 align-middle sm:px-6 lg:px-8">
-                <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 sm:rounded-lg">
-                  <table className="min-w-full divide-y divide-gray-300 dark:divide-gray-700">
-                    <thead className="bg-gray-50 dark:bg-gray-800">
-                      <tr>
-                        <th scope="col" className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 dark:text-white sm:pl-6">
-                          Employee
-                        </th>
-                        <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                          Role
-                        </th>
-                        <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                          Hours
-                        </th>
-                        <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                          Cash Tips
-                        </th>
-                        <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                          Credit Tips
-                        </th>
-                        <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                          Bar Tipout
-                        </th>
-                        <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                          Host Tipout
-                        </th>
-                        <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                          SA Tipout
-                        </th>
-                        <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                          Payroll Tips
-                        </th>
-                        <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                          Total Tips/Hour
-                        </th>
-                        <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                          Base Pay Rate
-                        </th>
-                        <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                          Total $/Hour
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-200 bg-white dark:bg-gray-900 dark:divide-gray-700">
-                      {employeeRoleSummaries.map((summary) => (
-                        <tr key={`${summary.employeeId}-${summary.roleName}`}>
-                          <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-[var(--foreground)] sm:pl-6">
-                            {summary.employeeName}
-                          </td>
-                          <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
-                            {summary.roleName}
-                          </td>
-                          <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
-                            {summary.totalHours.toFixed(1)}
-                          </td>
-                          <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
-                            ${summary.totalCashTips.toFixed(2)}
-                          </td>
-                          <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
-                            ${summary.totalCreditTips.toFixed(2)}
-                          </td>
-                          <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
-                            ${summary.totalBarTipout.toFixed(2)}
-                          </td>
-                          <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
-                            ${summary.totalHostTipout.toFixed(2)}
-                          </td>
-                          <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
-                            ${summary.totalSaTipout.toFixed(2)}
-                          </td>
-                          <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
-                            ${summary.totalPayrollTips !== undefined ? summary.totalPayrollTips.toFixed(2) : 'N/A'}
-                          </td>
-                          <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
-                            ${summary.totalTipsPerHour.toFixed(2)}
-                          </td>
-                          <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
-                            ${summary.basePayRate.toFixed(2)}
-                          </td>
-                          <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400 font-medium">
-                            ${(summary.totalTipsPerHour + summary.basePayRate).toFixed(2)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+          <div className="mt-12">
+            <h2 className="text-xl font-semibold text-[var(--foreground)] mb-6">Detailed Analysis</h2>
+            <div className="bg-white/50 dark:bg-gray-800/50 shadow sm:rounded-lg border border-gray-200 dark:border-gray-700">
+              <div className="px-4 py-5 sm:p-6">
+                <h3 className="text-lg font-medium leading-6 text-[var(--foreground)] mb-4">Tips Per Hour Summary</h3>
+                <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 sm:divide-x sm:divide-gray-200 dark:sm:divide-gray-700">
+                  <div className="sm:pr-12">
+                    <h4 className="text-sm font-medium text-gray-500 dark:text-gray-400">Bar</h4>
+                    <dl className="mt-2 grid grid-cols-2 gap-4">
+                      <div>
+                        <dt className="text-sm text-gray-500 dark:text-gray-400">Cash Tips/Hour</dt>
+                        <dd className="text-lg font-medium text-[var(--foreground)]">${summary.barCashTipsPerHour.toFixed(2)}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-sm text-gray-500 dark:text-gray-400">Credit Tips/Hour</dt>
+                        <dd className="text-lg font-medium text-[var(--foreground)]">${summary.barCreditTipsPerHour.toFixed(2)}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-sm text-gray-500 dark:text-gray-400">Total Tips/Hour</dt>
+                        <dd className="text-lg font-medium text-[var(--foreground)]">${summary.barTipsPerHour.toFixed(2)}</dd>
+                      </div>
+                    </dl>
+                  </div>
+                  <div className="sm:pl-12">
+                    <h4 className="text-sm font-medium text-gray-500 dark:text-gray-400">Servers</h4>
+                    <dl className="mt-2 grid grid-cols-2 gap-4">
+                      <div>
+                        <dt className="text-sm text-gray-500 dark:text-gray-400">Cash Tips/Hour</dt>
+                        <dd className="text-lg font-medium text-[var(--foreground)]">${summary.serverCashTipsPerHour.toFixed(2)}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-sm text-gray-500 dark:text-gray-400">Credit Tips/Hour</dt>
+                        <dd className="text-lg font-medium text-[var(--foreground)]">${summary.serverCreditTipsPerHour.toFixed(2)}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-sm text-gray-500 dark:text-gray-400">Total Tips/Hour</dt>
+                        <dd className="text-lg font-medium text-[var(--foreground)]">${summary.serverTipsPerHour.toFixed(2)}</dd>
+                      </div>
+                    </dl>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
 
-          <div className="mt-8">
-            <div className="bg-[var(--background)] p-6 rounded-lg shadow">
-              <TipoutBreakdownChart />
+          <div className="mt-12">
+            <h2 className="text-xl font-semibold text-[var(--foreground)] mb-6">Employee Breakdown</h2>
+            <div className="overflow-hidden bg-white/50 dark:bg-gray-800/50 shadow sm:rounded-lg border border-gray-200 dark:border-gray-700">
+              <table className="min-w-full divide-y divide-gray-300 dark:divide-gray-700">
+                <thead className="bg-gray-50/75 dark:bg-gray-800/75">
+                  <tr>
+                    <th scope="col" className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 dark:text-white sm:pl-6">
+                      Employee
+                    </th>
+                    <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
+                      Role
+                    </th>
+                    <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
+                      Hours
+                    </th>
+                    <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
+                      Cash Tips
+                    </th>
+                    <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
+                      Credit Tips
+                    </th>
+                    <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
+                      Bar Tipout
+                    </th>
+                    <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
+                      Host Tipout
+                    </th>
+                    <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
+                      SA Tipout
+                    </th>
+                    <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
+                      Payroll Tips
+                    </th>
+                    <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
+                      Total Tips/Hour
+                    </th>
+                    <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
+                      Base Pay Rate
+                    </th>
+                    <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
+                      Total $/Hour
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white/50 dark:bg-gray-800/50 divide-y divide-gray-200 dark:divide-gray-700">
+                  {employeeRoleSummaries.map((summary) => (
+                    <tr 
+                      key={`${summary.employeeId}-${summary.roleName}`}
+                      className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                      onClick={() => {
+                        const params = new URLSearchParams({
+                          employeeId: summary.employeeId,
+                          role: summary.roleName,
+                          startDate: filters.startDate,
+                          endDate: isDateRange ? filters.endDate : filters.startDate,
+                        })
+                        window.location.href = `/shifts?${params.toString()}`
+                      }}
+                    >
+                      <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-[var(--foreground)] sm:pl-6">
+                        {summary.employeeName}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
+                        {summary.roleName}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
+                        {summary.totalHours.toFixed(1)}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
+                        ${summary.totalCashTips.toFixed(2)}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
+                        ${summary.totalCreditTips.toFixed(2)}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
+                        ${summary.totalBarTipout.toFixed(2)}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
+                        ${summary.totalHostTipout.toFixed(2)}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
+                        ${summary.totalSaTipout.toFixed(2)}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
+                        ${summary.totalPayrollTips !== undefined ? summary.totalPayrollTips.toFixed(2) : 'N/A'}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
+                        ${summary.totalTipsPerHour.toFixed(2)}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
+                        ${summary.basePayRate.toFixed(2)}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400 font-medium">
+                        ${(summary.totalTipsPerHour + summary.basePayRate).toFixed(2)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
 
-          <div className="mt-8">
-            <div className="bg-[var(--background)] p-6 rounded-lg shadow">
-              <TipoutPerHourChart />
+          <div className="mt-12">
+            <h2 className="text-xl font-semibold text-[var(--foreground)] mb-6">Visualization & Analytics</h2>
+            <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
+              <div className="bg-white/50 dark:bg-gray-800/50 p-6 rounded-lg shadow border border-gray-200 dark:border-gray-700 transition-all hover:shadow-md h-[400px]">
+                <TipoutBreakdownChart />
+              </div>
+              
+              <div className="bg-white/50 dark:bg-gray-800/50 p-6 rounded-lg shadow border border-gray-200 dark:border-gray-700 transition-all hover:shadow-md h-[400px]">
+                <TipoutPerHourChart />
+              </div>
             </div>
-          </div>
 
-          <div className="mt-8">
-            <div className="bg-[var(--background)] p-6 rounded-lg shadow">
-              <ServerTipFlowChart />
-            </div>
-          </div>
-
-          <div className="mt-8">
-            <div className="bg-[var(--background)] p-6 rounded-lg shadow">
-              <TipoutRatesChart />
-            </div>
-          </div>
-
-          <div className="mt-8">
-            <div className="bg-[var(--background)] p-6 rounded-lg shadow">
-              <TipoutContributionChart />
-            </div>
-          </div>
-
-          <div className="mt-8">
-            <div className="bg-[var(--background)] p-6 rounded-lg shadow">
-              <TipoutCalculationExplainer />
+            <div className="mt-8 grid grid-cols-1 gap-8 md:grid-cols-2">
+              <div className="bg-white/50 dark:bg-gray-800/50 p-6 rounded-lg shadow border border-gray-200 dark:border-gray-700 transition-all hover:shadow-md h-[400px]">
+                <TipoutRatesChart />
+              </div>
+              
+              <div className="bg-white/50 dark:bg-gray-800/50 p-6 rounded-lg shadow border border-gray-200 dark:border-gray-700 transition-all hover:shadow-md h-[400px]">
+                <TipoutContributionChart />
+              </div>
             </div>
           </div>
         </>
-      )}
-
-      {/* Add a detailed visual explanation section when there's data */}
-      {shifts.length > 0 && (
-        <div className="mt-16">
-          <div className="sm:flex sm:items-center mb-6">
-            <div className="sm:flex-auto">
-              <h2 className="text-xl font-semibold text-[var(--foreground)]">Visual Tip Distribution</h2>
-              <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
-                Visual breakdown of where tips go and how they're distributed.
-              </p>
-            </div>
-          </div>
-          
-          <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
-            <div className="bg-[var(--background)] p-6 rounded-lg shadow">
-              <TipoutBreakdownChart />
-            </div>
-            
-            <div className="bg-[var(--background)] p-6 rounded-lg shadow">
-              <TipoutPerHourChart />
-            </div>
-          </div>
-          
-          <div className="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-2">
-            <div className="bg-[var(--background)] p-6 rounded-lg shadow">
-              <ServerTipFlowChart />
-            </div>
-            
-            <div className="bg-[var(--background)] p-6 rounded-lg shadow">
-              <TipoutRatesChart />
-            </div>
-          </div>
-          
-          <div className="mt-8 p-6 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-            <h3 className="text-lg font-medium leading-6 text-[var(--foreground)] mb-4">Understanding Your Tipouts</h3>
-            <div className="space-y-4">
-              <div>
-                <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">Bar Tipout</h4>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  Bar tipout is calculated as a percentage of your liquor sales. 
-                  It goes to bartenders who prepare drinks for your tables.
-                </p>
-              </div>
-              
-              <div>
-                <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">Host Tipout</h4>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  Host tipout is calculated as a percentage of your total tips. 
-                  It compensates hosts who seat and organize tables.
-                </p>
-              </div>
-              
-              <div>
-                <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">SA (Server Assistant) Tipout</h4>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  SA tipout is calculated as a percentage of your total tips. 
-                  It goes to server assistants who help run food, bus tables, and support the floor.
-                </p>
-              </div>
-              
-              <div>
-                <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">Credit Tips vs. Cash Tips</h4>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  Credit tips appear on your paycheck with tipouts already deducted.
-                  Cash tips are received directly and tipouts must be paid separately.
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
       )}
     </div>
   )

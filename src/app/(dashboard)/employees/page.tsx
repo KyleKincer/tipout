@@ -1,12 +1,21 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { PlusIcon, PencilIcon, TrashIcon } from '@heroicons/react/24/outline'
+import { PlusIcon, TrashIcon } from '@heroicons/react/24/outline'
+import Link from 'next/link'
+import LoadingSpinner from '@/components/LoadingSpinner'
+
+type Role = {
+  id: string
+  name: string
+}
 
 type Employee = {
   id: string
   name: string
   active: boolean
+  defaultRoleId: string | null
+  defaultRole?: Role
 }
 
 export default function EmployeesPage() {
@@ -14,8 +23,6 @@ export default function EmployeesPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isAddingEmployee, setIsAddingEmployee] = useState(false)
-  const [isEditingEmployee, setIsEditingEmployee] = useState(false)
-  const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null)
   const [newEmployeeName, setNewEmployeeName] = useState('')
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [employeeToDelete, setEmployeeToDelete] = useState<Employee | null>(null)
@@ -67,38 +74,6 @@ export default function EmployeesPage() {
     }
   }
 
-  const handleEditEmployee = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!editingEmployee) return
-
-    try {
-      const response = await fetch(`/api/employees/${editingEmployee.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          name: editingEmployee.name,
-          active: editingEmployee.active,
-        }),
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to update employee')
-      }
-
-      const updatedEmployee = await response.json()
-      setEmployees(employees.map(emp => 
-        emp.id === updatedEmployee.id ? updatedEmployee : emp
-      ))
-      setIsEditingEmployee(false)
-      setEditingEmployee(null)
-    } catch (err) {
-      setError('Failed to update employee')
-      console.error('Error updating employee:', err)
-    }
-  }
-
   const handleDeleteEmployee = async () => {
     if (!employeeToDelete) return
 
@@ -121,15 +96,15 @@ export default function EmployeesPage() {
   }
 
   if (isLoading) {
-    return <div>Loading...</div>
+    return <LoadingSpinner />
   }
 
   return (
     <div>
       <div className="sm:flex sm:items-center">
         <div className="sm:flex-auto">
-          <h1 className="text-2xl font-semibold text-gray-900">Employees</h1>
-          <p className="mt-2 text-sm text-gray-700">
+          <h1 className="text-2xl font-semibold text-[var(--foreground)]">Employees</h1>
+          <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
             A list of all employees in your restaurant.
           </p>
         </div>
@@ -146,21 +121,21 @@ export default function EmployeesPage() {
       </div>
 
       {error && (
-        <div className="mt-4 rounded-md bg-red-50 p-4">
+        <div className="mt-4 rounded-md bg-red-50 dark:bg-red-900/50 p-4">
           <div className="flex">
             <div className="ml-3">
-              <h3 className="text-sm font-medium text-red-800">{error}</h3>
+              <h3 className="text-sm font-medium text-red-800 dark:text-red-200">{error}</h3>
             </div>
           </div>
         </div>
       )}
 
       {isAddingEmployee && (
-        <div className="mt-4 bg-white shadow sm:rounded-lg">
+        <div className="mt-4 bg-white/50 dark:bg-gray-800/50 shadow sm:rounded-lg border border-gray-200 dark:border-gray-700">
           <div className="px-4 py-5 sm:p-6">
             <form onSubmit={handleAddEmployee} className="space-y-4">
               <div>
-                <label htmlFor="name" className="block text-sm font-medium text-gray-700">
+                <label htmlFor="name" className="block text-sm font-medium text-[var(--foreground)]">
                   Name
                 </label>
                 <div className="mt-1">
@@ -170,7 +145,7 @@ export default function EmployeesPage() {
                     id="name"
                     value={newEmployeeName}
                     onChange={(e) => setNewEmployeeName(e.target.value)}
-                    className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white"
                     placeholder="Enter employee name"
                   />
                 </div>
@@ -179,7 +154,7 @@ export default function EmployeesPage() {
                 <button
                   type="button"
                   onClick={() => setIsAddingEmployee(false)}
-                  className="rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
+                  className="rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-white dark:ring-gray-700 dark:hover:bg-gray-700"
                 >
                   Cancel
                 </button>
@@ -195,70 +170,13 @@ export default function EmployeesPage() {
         </div>
       )}
 
-      {isEditingEmployee && editingEmployee && (
-        <div className="mt-4 bg-white shadow sm:rounded-lg">
-          <div className="px-4 py-5 sm:p-6">
-            <form onSubmit={handleEditEmployee} className="space-y-4">
-              <div>
-                <label htmlFor="edit-name" className="block text-sm font-medium text-gray-700">
-                  Name
-                </label>
-                <div className="mt-1">
-                  <input
-                    type="text"
-                    name="edit-name"
-                    id="edit-name"
-                    value={editingEmployee.name}
-                    onChange={(e) => setEditingEmployee({ ...editingEmployee, name: e.target.value })}
-                    className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Status
-                </label>
-                <div className="mt-1">
-                  <select
-                    value={editingEmployee.active ? 'active' : 'inactive'}
-                    onChange={(e) => setEditingEmployee({ ...editingEmployee, active: e.target.value === 'active' })}
-                    className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                  >
-                    <option value="active">Active</option>
-                    <option value="inactive">Inactive</option>
-                  </select>
-                </div>
-              </div>
-              <div className="flex justify-end space-x-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsEditingEmployee(false)
-                    setEditingEmployee(null)
-                  }}
-                  className="rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
-                >
-                  Save
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
       {showDeleteConfirm && employeeToDelete && (
-        <div className="mt-4 bg-white shadow sm:rounded-lg">
+        <div className="mt-4 bg-white/50 dark:bg-gray-800/50 shadow sm:rounded-lg border border-gray-200 dark:border-gray-700">
           <div className="px-4 py-5 sm:p-6">
-            <h3 className="text-lg font-medium leading-6 text-gray-900">
+            <h3 className="text-lg font-medium leading-6 text-[var(--foreground)]">
               Delete Employee
             </h3>
-            <div className="mt-2 max-w-xl text-sm text-gray-500">
+            <div className="mt-2 max-w-xl text-sm text-gray-500 dark:text-gray-400">
               <p>Are you sure you want to delete {employeeToDelete.name}? This action cannot be undone.</p>
             </div>
             <div className="mt-5 flex justify-end space-x-3">
@@ -268,7 +186,7 @@ export default function EmployeesPage() {
                   setShowDeleteConfirm(false)
                   setEmployeeToDelete(null)
                 }}
-                className="rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
+                className="rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-white dark:ring-gray-700 dark:hover:bg-gray-700"
               >
                 Cancel
               </button>
@@ -287,56 +205,57 @@ export default function EmployeesPage() {
       <div className="mt-8 flow-root">
         <div className="-mx-4 -my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
           <div className="inline-block min-w-full py-2 align-middle sm:px-6 lg:px-8">
-            <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 sm:rounded-lg">
-              <table className="min-w-full divide-y divide-gray-300">
-                <thead className="bg-gray-50">
+            <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 sm:rounded-lg border border-gray-200 dark:border-gray-700">
+              <table className="min-w-full divide-y divide-gray-300 dark:divide-gray-700">
+                <thead className="bg-gray-50/75 dark:bg-gray-800/75">
                   <tr>
-                    <th scope="col" className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 sm:pl-6">
+                    <th scope="col" className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 dark:text-white sm:pl-6">
                       Name
                     </th>
-                    <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
+                    <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
                       Status
+                    </th>
+                    <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
+                      Default Role
                     </th>
                     <th scope="col" className="relative py-3.5 pl-3 pr-4 sm:pr-6">
                       <span className="sr-only">Actions</span>
                     </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-200 bg-white">
+                <tbody className="bg-white/50 dark:bg-gray-800/50 divide-y divide-gray-200 dark:divide-gray-700">
                   {employees.map((employee) => (
                     <tr key={employee.id}>
-                      <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-gray-900 sm:pl-6">
+                      <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-[var(--foreground)] sm:pl-6">
                         {employee.name}
                       </td>
-                      <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                      <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
                         <span className={`inline-flex rounded-full px-2 text-xs font-semibold leading-5 ${
                           employee.active
-                            ? 'bg-green-100 text-green-800'
-                            : 'bg-red-100 text-red-800'
+                            ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-200'
+                            : 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200'
                         }`}>
                           {employee.active ? 'Active' : 'Inactive'}
                         </span>
                       </td>
+                      <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
+                        {employee.defaultRole?.name || 'None'}
+                      </td>
                       <td className="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
-                        <button
-                          onClick={() => {
-                            setEditingEmployee(employee)
-                            setIsEditingEmployee(true)
-                          }}
-                          className="text-indigo-600 hover:text-indigo-900 mr-4"
+                        <Link
+                          href={`/employees/${employee.id}/edit`}
+                          className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300 mr-4"
                         >
-                          <PencilIcon className="h-5 w-5" />
-                          <span className="sr-only">Edit</span>
-                        </button>
+                          Edit
+                        </Link>
                         <button
                           onClick={() => {
                             setEmployeeToDelete(employee)
                             setShowDeleteConfirm(true)
                           }}
-                          className="text-red-600 hover:text-red-900"
+                          className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
                         >
-                          <TrashIcon className="h-5 w-5" />
-                          <span className="sr-only">Delete</span>
+                          Delete
                         </button>
                       </td>
                     </tr>

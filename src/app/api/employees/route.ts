@@ -4,8 +4,8 @@ import { prisma } from '@/lib/prisma'
 export async function GET() {
   try {
     const employees = await prisma.employee.findMany({
-      where: {
-        active: true,
+      include: {
+        defaultRole: true,
       },
       orderBy: {
         name: 'asc',
@@ -36,6 +36,11 @@ export async function POST(request: Request) {
     const employee = await prisma.employee.create({
       data: {
         name,
+        active: true,
+        defaultRoleId: null,
+      },
+      include: {
+        defaultRole: true,
       },
     })
 

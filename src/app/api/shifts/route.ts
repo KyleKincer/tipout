@@ -3,17 +3,15 @@ import { prisma } from '@/lib/prisma'
 
 // Helper function to ensure consistent date handling
 function parseDate(dateString: string): Date {
-  const date = new Date(dateString)
-  // Set to start of day in local timezone
-  date.setHours(0, 0, 0, 0)
+  // Create date in UTC to match database storage
+  const date = new Date(dateString + 'T00:00:00.000Z')
   return date
 }
 
 // Helper function to get the end of a day
 function getEndOfDay(dateString: string): Date {
-  const date = new Date(dateString)
-  // Set to end of day in local timezone
-  date.setHours(23, 59, 59, 999)
+  // Create date in UTC to match database storage
+  const date = new Date(dateString + 'T23:59:59.999Z')
   return date
 }
 
@@ -23,12 +21,19 @@ export async function GET(request: Request) {
     const startDate = searchParams.get('startDate')
     const endDate = searchParams.get('endDate')
     const employeeId = searchParams.get('employeeId')
+    const role = searchParams.get('role')
 
     // Modified where clause for date handling
     let where: any = {}
     
     if (employeeId) {
       where.employeeId = employeeId
+    }
+    
+    if (role) {
+      where.role = {
+        name: role
+      }
     }
     
     if (startDate && endDate) {

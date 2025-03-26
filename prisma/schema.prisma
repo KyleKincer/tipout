@@ -15,28 +15,31 @@ datasource db {
 }
 
 model Employee {
-  id        String   @id @default(uuid())
-  name      String
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  shifts    Shift[]
+  id            String    @id @default(cuid())
+  name          String
+  active        Boolean   @default(true)
+  defaultRoleId String?
+  defaultRole   Role?     @relation("DefaultRole", fields: [defaultRoleId], references: [id])
+  shifts        Shift[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 }
 
 model Role {
-  id          String    @id @default(uuid())
-  name        String
-  basePayRate Decimal   @default(0)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  shifts      Shift[]
-  configs     RoleConfig[]
+  id            String     @id @default(cuid())
+  name          String
+  basePayRate   Decimal    @default(0)
+  defaultFor    Employee[] @relation("DefaultRole")
+  shifts        Shift[]
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  configs       RoleConfig[]
 
   @@index([name])
 }
 
 model Shift {
-  id           String   @id @default(uuid())
+  id           String   @id @default(cuid())
   employeeId   String
   employee     Employee @relation(fields: [employeeId], references: [id])
   roleId       String

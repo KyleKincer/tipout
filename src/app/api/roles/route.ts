@@ -21,6 +21,7 @@ export async function GET() {
             percentageRate: true,
             effectiveFrom: true,
             effectiveTo: true,
+            paysTipout: true,
           },
         },
       },

@@ -1533,16 +1533,42 @@ export default function ReportsPage() {
                       <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
                         ${summary.totalCreditTips.toFixed(2)}
                       </td>
-                      <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
+                      <td className={`whitespace-nowrap px-3 py-4 text-sm ${
+                        summary.totalBarTipout !== 0 
+                          ? (summary.totalBarTipout < 0 
+                              ? 'text-red-600 dark:text-red-400' 
+                              : 'text-green-600 dark:text-green-400')
+                          : 'text-gray-500 dark:text-gray-400'
+                      }`}>
                         ${summary.totalBarTipout.toFixed(2)}
                       </td>
-                      <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
+                      <td className={`whitespace-nowrap px-3 py-4 text-sm ${
+                        summary.totalHostTipout !== 0 
+                          ? (summary.totalHostTipout < 0 
+                              ? 'text-red-600 dark:text-red-400' 
+                              : 'text-green-600 dark:text-green-400')
+                          : 'text-gray-500 dark:text-gray-400'
+                      }`}>
                         ${summary.totalHostTipout.toFixed(2)}
                       </td>
-                      <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
+                      <td className={`whitespace-nowrap px-3 py-4 text-sm ${
+                        summary.totalSaTipout !== 0 
+                          ? (summary.totalSaTipout < 0 
+                              ? 'text-red-600 dark:text-red-400' 
+                              : 'text-green-600 dark:text-green-400')
+                          : 'text-gray-500 dark:text-gray-400'
+                      }`}>
                         ${summary.totalSaTipout.toFixed(2)}
                       </td>
-                      <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
+                      <td className={`whitespace-nowrap px-3 py-4 text-sm ${
+                        summary.totalPayrollTips !== undefined 
+                          ? (summary.totalPayrollTips !== 0 
+                              ? (summary.totalPayrollTips < 0 
+                                  ? 'text-red-600 dark:text-red-400' 
+                                  : 'text-green-600 dark:text-green-400')
+                              : 'text-gray-500 dark:text-gray-400')
+                          : 'text-gray-500 dark:text-gray-400'
+                      }`}>
                         ${summary.totalPayrollTips !== undefined ? summary.totalPayrollTips.toFixed(2) : 'N/A'}
                       </td>
                       <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
@@ -1551,7 +1577,7 @@ export default function ReportsPage() {
                       <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
                         ${summary.basePayRate.toFixed(2)}
                       </td>
-                      <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400 font-medium">
+                      <td className="whitespace-nowrap px-3 py-4 text-sm font-medium text-green-600 dark:text-green-400">
                         ${(summary.totalTipsPerHour + summary.basePayRate).toFixed(2)}
                       </td>
                     </tr>

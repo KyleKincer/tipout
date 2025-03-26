@@ -103,9 +103,9 @@ export default function EmployeesPage() {
     <div className="px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
       <div className="sm:flex sm:items-center">
         <div className="sm:flex-auto">
-          <h1 className="text-2xl font-semibold text-[var(--foreground)]">Employees</h1>
+          <h1 className="text-2xl font-semibold text-[var(--foreground)]">employees</h1>
           <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
-            A list of all employees in your restaurant.
+            a list of all employees in your restaurant.
           </p>
         </div>
         <div className="mt-4 sm:ml-16 sm:mt-0 sm:flex-none">
@@ -115,7 +115,7 @@ export default function EmployeesPage() {
             className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
           >
             <PlusIcon className="h-5 w-5 inline-block mr-1" />
-            Add employee
+            add employee
           </button>
         </div>
       </div>
@@ -133,11 +133,11 @@ export default function EmployeesPage() {
       {isAddingEmployee && (
         <div className="mt-8 bg-white/50 dark:bg-gray-800/50 shadow sm:rounded-lg border border-gray-200 dark:border-gray-700 transition-all hover:shadow-md">
           <div className="px-4 py-5 sm:p-6">
-            <h3 className="text-base font-medium text-[var(--foreground)] mb-4">Add New Employee</h3>
+            <h3 className="text-base font-medium text-[var(--foreground)] mb-4">add new employee</h3>
             <form onSubmit={handleAddEmployee} className="space-y-4">
               <div>
                 <label htmlFor="name" className="block text-sm font-medium text-[var(--foreground)]">
-                  Name <span className="text-red-500">*</span>
+                  name <span className="text-red-500">*</span>
                 </label>
                 <div className="mt-2">
                   <input
@@ -147,7 +147,7 @@ export default function EmployeesPage() {
                     value={newEmployeeName}
                     onChange={(e) => setNewEmployeeName(e.target.value)}
                     className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white"
-                    placeholder="Enter employee name"
+                    placeholder="enter employee name"
                   />
                 </div>
               </div>
@@ -157,13 +157,13 @@ export default function EmployeesPage() {
                   onClick={() => setIsAddingEmployee(false)}
                   className="rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-white dark:ring-gray-700 dark:hover:bg-gray-700"
                 >
-                  Cancel
+                  cancel
                 </button>
                 <button
                   type="submit"
                   className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
                 >
-                  Add
+                  add
                 </button>
               </div>
             </form>
@@ -175,10 +175,10 @@ export default function EmployeesPage() {
         <div className="mt-8 bg-white/50 dark:bg-gray-800/50 shadow sm:rounded-lg border border-gray-200 dark:border-gray-700 transition-all hover:shadow-md">
           <div className="px-4 py-5 sm:p-6">
             <h3 className="text-base font-medium text-[var(--foreground)] mb-4">
-              Delete Employee
+              delete employee
             </h3>
             <div className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-              <p>Are you sure you want to delete {employeeToDelete.name}? This action cannot be undone.</p>
+              <p>are you sure you want to delete {employeeToDelete.name}? this action cannot be undone.</p>
             </div>
             <div className="mt-5 flex justify-end space-x-3">
               <button
@@ -189,14 +189,14 @@ export default function EmployeesPage() {
                 }}
                 className="rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-white dark:ring-gray-700 dark:hover:bg-gray-700"
               >
-                Cancel
+                cancel
               </button>
               <button
                 type="button"
                 onClick={handleDeleteEmployee}
                 className="rounded-md bg-red-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600"
               >
-                Delete
+                delete
               </button>
             </div>
           </div>
@@ -209,16 +209,16 @@ export default function EmployeesPage() {
             <thead className="bg-gray-50/75 dark:bg-gray-800/75">
               <tr>
                 <th scope="col" className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 dark:text-white sm:pl-6">
-                  Name
+                  name
                 </th>
                 <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                  Status
+                  status
                 </th>
                 <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                  Default Role
+                  default role
                 </th>
                 <th scope="col" className="relative py-3.5 pl-3 pr-4 sm:pr-6">
-                  <span className="sr-only">Actions</span>
+                  <span className="sr-only">actions</span>
                 </th>
               </tr>
             </thead>
@@ -234,18 +234,18 @@ export default function EmployeesPage() {
                         ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-200'
                         : 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200'
                     }`}>
-                      {employee.active ? 'Active' : 'Inactive'}
+                      {employee.active ? 'active' : 'inactive'}
                     </span>
                   </td>
                   <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
-                    {employee.defaultRole?.name || 'None'}
+                    {employee.defaultRole?.name || 'none'}
                   </td>
                   <td className="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
                     <Link
                       href={`/employees/${employee.id}/edit`}
                       className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300 mr-4"
                     >
-                      Edit
+                      edit
                     </Link>
                     <button
                       onClick={() => {
@@ -254,7 +254,7 @@ export default function EmployeesPage() {
                       }}
                       className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
                     >
-                      Delete
+                      delete
                     </button>
                   </td>
                 </tr>

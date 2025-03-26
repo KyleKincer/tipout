@@ -182,9 +182,9 @@ function ShiftsContent() {
     <div className="px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
       <div className="sm:flex sm:items-center">
         <div className="sm:flex-auto">
-          <h1 className="text-2xl font-semibold text-[var(--foreground)]">Shifts</h1>
+          <h1 className="text-2xl font-semibold text-[var(--foreground)]">shifts</h1>
           <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
-            View and manage employee shifts and tipouts.
+            view and manage employee shifts and tipouts.
           </p>
         </div>
         <div className="mt-4 sm:ml-16 sm:mt-0 sm:flex-none">
@@ -201,10 +201,10 @@ function ShiftsContent() {
         <div className="px-4 py-5 sm:p-6">
           {/* Filter Section */}
           <div className="mb-8">
-            <h3 className="text-base font-medium text-[var(--foreground)] mb-4">Filter Shifts</h3>
+            <h3 className="text-base font-medium text-[var(--foreground)] mb-4">filter shifts</h3>
             <div className="space-y-6">
               <div className="flex items-center space-x-4">
-                <span className="text-sm text-gray-700 dark:text-gray-300">Single Date</span>
+                <span className="text-sm text-gray-700 dark:text-gray-300">single date</span>
                 <button
                   type="button"
                   onClick={() => setIsDateRange(!isDateRange)}
@@ -218,13 +218,13 @@ function ShiftsContent() {
                     } pointer-events-none relative inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
                   />
                 </button>
-                <span className="text-sm text-gray-700 dark:text-gray-300">Date Range</span>
+                <span className="text-sm text-gray-700 dark:text-gray-300">date range</span>
               </div>
 
               <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
                 <div>
                   <label htmlFor="startDate" className="block text-sm font-medium text-[var(--foreground)]">
-                    {isDateRange ? 'Start Date' : 'Date'}
+                    {isDateRange ? 'start date' : 'date'}
                   </label>
                   <div className="mt-2">
                     <input
@@ -241,7 +241,7 @@ function ShiftsContent() {
                 {isDateRange && (
                   <div>
                     <label htmlFor="endDate" className="block text-sm font-medium text-[var(--foreground)]">
-                      End Date
+                      end date
                     </label>
                     <div className="mt-2">
                       <input
@@ -258,7 +258,7 @@ function ShiftsContent() {
 
                 <div>
                   <label htmlFor="employeeId" className="block text-sm font-medium text-[var(--foreground)]">
-                    Employee
+                    employee
                   </label>
                   <div className="mt-2">
                     <select
@@ -268,7 +268,7 @@ function ShiftsContent() {
                       disabled={isFilterLoading}
                       className="block w-full rounded-md border-gray-300 shadow-sm px-3 py-2 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <option value="">All employees</option>
+                      <option value="">all employees</option>
                       {Object.values(
                         shifts.reduce((acc, shift) => {
                           acc[shift.employee.id] = shift.employee;
@@ -285,7 +285,7 @@ function ShiftsContent() {
 
                 <div>
                   <label htmlFor="role" className="block text-sm font-medium text-[var(--foreground)]">
-                    Role
+                    role
                   </label>
                   <div className="mt-2">
                     <select
@@ -295,7 +295,7 @@ function ShiftsContent() {
                       disabled={isFilterLoading}
                       className="block w-full rounded-md border-gray-300 shadow-sm px-3 py-2 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <option value="">All roles</option>
+                      <option value="">all roles</option>
                       {Object.values(
                         shifts.reduce((acc, shift) => {
                           acc[shift.role.name] = shift.role.name;
@@ -336,11 +336,11 @@ function ShiftsContent() {
                 d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
               />
             </svg>
-            <h3 className="mt-4 text-sm font-semibold text-[var(--foreground)]">No shifts found</h3>
+            <h3 className="mt-4 text-sm font-semibold text-[var(--foreground)]">no shifts found</h3>
             <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
               {isDateRange
-                ? `No shifts were found between ${format(new Date(filters.startDate + 'T00:00:00'), 'MMMM d, yyyy')} and ${format(new Date(filters.endDate + 'T00:00:00'), 'MMMM d, yyyy')}`
-                : `No shifts were found for ${format(new Date(filters.startDate + 'T00:00:00'), 'MMMM d, yyyy')}`}
+                ? `no shifts were found between ${format(new Date(filters.startDate + 'T00:00:00'), 'MMMM d, yyyy').toLowerCase()} and ${format(new Date(filters.endDate + 'T00:00:00'), 'MMMM d, yyyy').toLowerCase()}`
+                : `no shifts were found for ${format(new Date(filters.startDate + 'T00:00:00'), 'MMMM d, yyyy').toLowerCase()}`}
               {filters.employeeId && ' for the selected employee'}
               {filters.role && ' for the selected role'}.
             </p>
@@ -349,7 +349,7 @@ function ShiftsContent() {
                 href="/shifts/new"
                 className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
               >
-                Add a shift
+                add a shift
               </Link>
             </div>
           </div>
@@ -361,37 +361,37 @@ function ShiftsContent() {
               <thead className="bg-gray-50/75 dark:bg-gray-800/75">
                 <tr>
                   <th scope="col" className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 dark:text-white sm:pl-6">
-                    Date
+                    date
                   </th>
                   <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                    Employee
+                    employee
                   </th>
                   <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                    Role
+                    role
                   </th>
                   <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                    Hours
+                    hours
                   </th>
                   <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                    Cash Tips
+                    cash tips
                   </th>
                   <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                    Credit Tips
+                    credit tips
                   </th>
                   <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                    Liquor Sales
+                    liquor sales
                   </th>
                   <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                    Bar Tipout
+                    bar tipout
                   </th>
                   <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                    Host Tipout
+                    host tipout
                   </th>
                   <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                    SA Tipout
+                    sa tipout
                   </th>
                   <th scope="col" className="relative py-3.5 pl-3 pr-4 sm:pr-6">
-                    <span className="sr-only">Actions</span>
+                    actions
                   </th>
                 </tr>
               </thead>
@@ -444,13 +444,13 @@ function ShiftsContent() {
                           href={`/shifts/${shift.id}/edit`}
                           className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300 mr-4"
                         >
-                          Edit
+                          edit
                         </Link>
                         <button
                           onClick={() => handleDelete(shift.id)}
                           className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
                         >
-                          Delete
+                          delete
                         </button>
                       </td>
                     </tr>

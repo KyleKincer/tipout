@@ -605,7 +605,7 @@ function ReportsContent() {
 
     return (
       <div className="h-full">
-        <h3 className="text-lg font-medium leading-6 text-[var(--foreground)] mb-4">Where Tips Go</h3>
+        <h3 className="text-lg font-medium leading-6 text-[var(--foreground)] mb-4">where tips go</h3>
         <div className="h-[calc(100%-2rem)] flex justify-center">
           <div className="w-full max-w-lg">
           <Doughnut
@@ -706,7 +706,7 @@ function ReportsContent() {
 
     return (
       <div className="h-full">
-        <h3 className="text-lg font-medium leading-6 text-[var(--foreground)] mb-4">Earnings Per Hour By Role</h3>
+        <h3 className="text-lg font-medium leading-6 text-[var(--foreground)] mb-4">earnings per hour by role</h3>
         <div className="h-[calc(100%-2rem)]">
           <Bar
             data={data}
@@ -817,7 +817,7 @@ function ReportsContent() {
 
     return (
       <div className="h-full">
-        <h3 className="text-lg font-medium leading-6 text-[var(--foreground)] mb-4">Tipout Flow by Employee</h3>
+        <h3 className="text-lg font-medium leading-6 text-[var(--foreground)] mb-4">tipout flow by employee</h3>
         <div className="h-[calc(100%-2rem)]">
           <Bar
             data={data}
@@ -935,7 +935,7 @@ function ReportsContent() {
 
     return (
       <div className="h-full">
-        <h3 className="text-lg font-medium leading-6 text-[var(--foreground)] mb-4">Tipout Rates By Role</h3>
+        <h3 className="text-lg font-medium leading-6 text-[var(--foreground)] mb-4">tipout rates by role</h3>
         <div className="h-[calc(100%-2rem)]">
           <Bar
             data={data}
@@ -997,9 +997,9 @@ function ReportsContent() {
     <div className="px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
       <div className="sm:flex sm:items-center">
         <div className="sm:flex-auto">
-          <h1 className="text-2xl font-semibold text-[var(--foreground)]">Reports</h1>
+          <h1 className="text-2xl font-semibold text-[var(--foreground)]">reports</h1>
           <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
-            View and analyze tipout data.
+            view and analyze tipout data.
           </p>
         </div>
       </div>
@@ -1014,10 +1014,10 @@ function ReportsContent() {
         </div>
       )}
 
-      <div className="mt-4 bg-[var(--background)] shadow sm:rounded-lg">
+      <div className="mt-4 bg-white/50 dark:bg-gray-800/50 shadow sm:rounded-lg border border-gray-200 dark:border-gray-700">
         <div className="px-4 py-5 sm:p-6">
           <div className="flex items-center space-x-4 mb-4">
-            <span className="text-sm text-gray-700 dark:text-gray-300">Single Date</span>
+            <span className="text-sm text-gray-700 dark:text-gray-300">single date</span>
             <button
               type="button"
               onClick={() => setIsDateRange(!isDateRange)}
@@ -1031,12 +1031,12 @@ function ReportsContent() {
                 } pointer-events-none relative inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
               />
             </button>
-            <span className="text-sm text-gray-700 dark:text-gray-300">Date Range</span>
+            <span className="text-sm text-gray-700 dark:text-gray-300">date range</span>
           </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div>
               <label htmlFor="startDate" className="block text-sm font-medium text-[var(--foreground)]">
-                {isDateRange ? 'Start Date' : 'Date'}
+                {isDateRange ? 'start date' : 'date'}
               </label>
               <div className="mt-1">
                 <input
@@ -1052,7 +1052,7 @@ function ReportsContent() {
             {isDateRange && (
               <div>
                 <label htmlFor="endDate" className="block text-sm font-medium text-[var(--foreground)]">
-                  End Date
+                  end date
                 </label>
                 <div className="mt-1">
                   <input
@@ -1068,7 +1068,7 @@ function ReportsContent() {
             )}
             <div>
               <label htmlFor="employeeId" className="block text-sm font-medium text-[var(--foreground)]">
-                Employee
+                employee
               </label>
               <div className="mt-1">
                 <select
@@ -1078,7 +1078,7 @@ function ReportsContent() {
                   disabled={isFilterLoading}
                   className="block w-full rounded-md border-gray-300 shadow-sm px-3 py-2 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <option value="">All employees</option>
+                  <option value="">all employees</option>
                   {employees.map((employee) => (
                     <option key={employee.id} value={employee.id}>
                       {employee.name}
@@ -1111,11 +1111,11 @@ function ReportsContent() {
               d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
             />
           </svg>
-          <h3 className="mt-2 text-sm font-semibold text-[var(--foreground)]">No data available</h3>
+          <h3 className="mt-2 text-sm font-semibold text-[var(--foreground)]">no data available</h3>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
             {filters.startDate === filters.endDate
-              ? `No shifts were found for ${format(new Date(filters.startDate), 'MMMM d, yyyy')}.`
-              : `No shifts were found between ${format(new Date(filters.startDate), 'MMMM d, yyyy')} and ${format(new Date(filters.endDate), 'MMMM d, yyyy')}.`}
+              ? `no shifts were found for ${format(new Date(filters.startDate), 'MMMM d, yyyy').toLowerCase()}.`
+              : `no shifts were found between ${format(new Date(filters.startDate), 'MMMM d, yyyy').toLowerCase()} and ${format(new Date(filters.endDate), 'MMMM d, yyyy').toLowerCase()}.`}
             {filters.employeeId && ' for the selected employee.'}
           </p>
           <div className="mt-6">
@@ -1123,7 +1123,7 @@ function ReportsContent() {
               href="/shifts/new"
               className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
             >
-              Add a shift
+              add a shift
             </Link>
           </div>
         </div>
@@ -1142,7 +1142,7 @@ function ReportsContent() {
                   </div>
                   <div className="ml-4 sm:ml-5 w-0 flex-1">
                     <dl>
-                      <dt className="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">Total Shifts</dt>
+                      <dt className="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">total shifts</dt>
                       <dd className="text-base sm:text-lg font-medium text-[var(--foreground)]">{summary.totalShifts}</dd>
                     </dl>
                   </div>
@@ -1162,7 +1162,7 @@ function ReportsContent() {
                   </div>
                   <div className="ml-4 sm:ml-5 w-0 flex-1">
                     <dl>
-                      <dt className="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">Total Tips</dt>
+                      <dt className="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">total tips</dt>
                       <dd className="text-base sm:text-lg font-medium text-[var(--foreground)]">
                         ${(summary.totalCashTips + summary.totalCreditTips).toFixed(2)}
                       </dd>
@@ -1184,7 +1184,7 @@ function ReportsContent() {
                   </div>
                   <div className="ml-4 sm:ml-5 w-0 flex-1">
                     <dl>
-                      <dt className="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">Total Tipouts</dt>
+                      <dt className="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">total tipouts</dt>
                       <dd className="text-base sm:text-lg font-medium text-[var(--foreground)]">
                         ${(summary.totalBarTipout + summary.totalHostTipout + summary.totalSaTipout).toFixed(2)}
                       </dd>
@@ -1206,7 +1206,7 @@ function ReportsContent() {
                   </div>
                   <div className="ml-4 sm:ml-5 w-0 flex-1">
                     <dl>
-                      <dt className="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">Total Hours</dt>
+                      <dt className="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">total hours</dt>
                       <dd className="text-base sm:text-lg font-medium text-[var(--foreground)]">{summary.totalHours.toFixed(1)}</dd>
                     </dl>
                   </div>
@@ -1216,41 +1216,41 @@ function ReportsContent() {
           </div>
 
           <div className="mt-12">
-            <h2 className="text-xl font-semibold text-[var(--foreground)] mb-6">Detailed Analysis</h2>
+            <h2 className="text-xl font-semibold text-[var(--foreground)] mb-6">detailed analysis</h2>
             <div className="bg-white/50 dark:bg-gray-800/50 shadow sm:rounded-lg border border-gray-200 dark:border-gray-700">
             <div className="px-4 py-5 sm:p-6">
-                <h3 className="text-lg font-medium leading-6 text-[var(--foreground)] mb-4">Tips Per Hour Summary</h3>
+                <h3 className="text-lg font-medium leading-6 text-[var(--foreground)] mb-4">tips per hour summary</h3>
                 <div className="mt-4 grid grid-cols-1 gap-6 sm:grid-cols-2 sm:gap-8 sm:divide-x sm:divide-gray-200 dark:sm:divide-gray-700">
                   <div className="sm:pr-8">
-                  <h4 className="text-sm font-medium text-gray-500 dark:text-gray-400">Bar</h4>
+                  <h4 className="text-sm font-medium text-gray-500 dark:text-gray-400">bar</h4>
                   <dl className="mt-2 grid grid-cols-2 gap-4">
                     <div>
-                      <dt className="text-sm text-gray-500 dark:text-gray-400">Cash Tips/Hour</dt>
+                      <dt className="text-sm text-gray-500 dark:text-gray-400">cash tips/hour</dt>
                         <dd className="text-base sm:text-lg font-medium text-[var(--foreground)]">${summary.barCashTipsPerHour.toFixed(2)}</dd>
                     </div>
                     <div>
-                      <dt className="text-sm text-gray-500 dark:text-gray-400">Credit Tips/Hour</dt>
+                      <dt className="text-sm text-gray-500 dark:text-gray-400">credit tips/hour</dt>
                         <dd className="text-base sm:text-lg font-medium text-[var(--foreground)]">${summary.barCreditTipsPerHour.toFixed(2)}</dd>
                     </div>
                     <div>
-                      <dt className="text-sm text-gray-500 dark:text-gray-400">Total Tips/Hour</dt>
+                      <dt className="text-sm text-gray-500 dark:text-gray-400">total tips/hour</dt>
                         <dd className="text-base sm:text-lg font-medium text-[var(--foreground)]">${summary.barTipsPerHour.toFixed(2)}</dd>
                     </div>
                   </dl>
                 </div>
                   <div className="sm:pl-8">
-                  <h4 className="text-sm font-medium text-gray-500 dark:text-gray-400">Servers</h4>
+                  <h4 className="text-sm font-medium text-gray-500 dark:text-gray-400">servers</h4>
                   <dl className="mt-2 grid grid-cols-2 gap-4">
                     <div>
-                      <dt className="text-sm text-gray-500 dark:text-gray-400">Cash Tips/Hour</dt>
+                      <dt className="text-sm text-gray-500 dark:text-gray-400">cash tips/hour</dt>
                         <dd className="text-base sm:text-lg font-medium text-[var(--foreground)]">${summary.serverCashTipsPerHour.toFixed(2)}</dd>
                     </div>
                     <div>
-                      <dt className="text-sm text-gray-500 dark:text-gray-400">Credit Tips/Hour</dt>
+                      <dt className="text-sm text-gray-500 dark:text-gray-400">credit tips/hour</dt>
                         <dd className="text-base sm:text-lg font-medium text-[var(--foreground)]">${summary.serverCreditTipsPerHour.toFixed(2)}</dd>
                     </div>
                     <div>
-                      <dt className="text-sm text-gray-500 dark:text-gray-400">Total Tips/Hour</dt>
+                      <dt className="text-sm text-gray-500 dark:text-gray-400">total tips/hour</dt>
                         <dd className="text-base sm:text-lg font-medium text-[var(--foreground)]">${summary.serverTipsPerHour.toFixed(2)}</dd>
                     </div>
                   </dl>
@@ -1261,7 +1261,7 @@ function ReportsContent() {
           </div>
 
           <div className="mt-12">
-            <h2 className="text-xl font-semibold text-[var(--foreground)] mb-6">Employee Breakdown</h2>
+            <h2 className="text-xl font-semibold text-[var(--foreground)] mb-6">employee breakdown</h2>
             
             {/* Mobile card view */}
             <div className="block md:hidden space-y-4">
@@ -1298,19 +1298,19 @@ function ReportsContent() {
                   {/* Tips Section */}
                   <div className="grid grid-cols-3 gap-4 mb-4">
                     <div>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">Cash Tips</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">cash tips</p>
                       <p className="text-sm font-medium text-[var(--foreground)]">
                         ${summary.totalCashTips.toFixed(2)}
                       </p>
                     </div>
                     <div>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">Credit Tips</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">credit tips</p>
                       <p className="text-sm font-medium text-[var(--foreground)]">
                         ${summary.totalCreditTips.toFixed(2)}
                       </p>
                     </div>
                     <div>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">Total Tips</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">total tips</p>
                       <p className="text-sm font-medium text-[var(--foreground)]">
                         ${(summary.totalCashTips + summary.totalCreditTips).toFixed(2)}
                       </p>
@@ -1319,10 +1319,10 @@ function ReportsContent() {
 
                   {/* Tipouts Section */}
                   <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
-                    <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">Tipouts</p>
+                    <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">tipouts</p>
                     <div className="grid grid-cols-3 gap-4">
                       <div>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">Bar</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">bar</p>
                         <p className={`text-sm font-medium ${
                           summary.totalBarTipout !== 0 
                             ? (summary.totalBarTipout < 0 
@@ -1334,7 +1334,7 @@ function ReportsContent() {
                         </p>
                       </div>
                       <div>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">Host</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">host</p>
                         <p className={`text-sm font-medium ${
                           summary.totalHostTipout !== 0 
                             ? (summary.totalHostTipout < 0 
@@ -1346,7 +1346,7 @@ function ReportsContent() {
                         </p>
                       </div>
                       <div>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">SA</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">sa</p>
                         <p className={`text-sm font-medium ${
                           summary.totalSaTipout !== 0 
                             ? (summary.totalSaTipout < 0 
@@ -1364,19 +1364,19 @@ function ReportsContent() {
                   <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
                     <div className="grid grid-cols-3 gap-4">
                       <div>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">Tips/Hour</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">tips/hour</p>
                         <p className="text-sm font-medium text-[var(--foreground)]">
                           ${summary.totalTipsPerHour.toFixed(2)}
                         </p>
                       </div>
                       <div>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">Base Rate</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">base rate</p>
                         <p className="text-sm font-medium text-[var(--foreground)]">
                           ${summary.basePayRate.toFixed(2)}
                         </p>
                       </div>
                       <div>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">Total/Hour</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">total/hour</p>
                         <p className="text-sm font-medium text-green-600 dark:text-green-400">
                           ${(summary.totalTipsPerHour + summary.basePayRate).toFixed(2)}
                         </p>
@@ -1395,40 +1395,40 @@ function ReportsContent() {
                     <thead className="bg-gray-50/75 dark:bg-gray-800/75">
                       <tr>
                         <th scope="col" className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 dark:text-white sm:pl-6">
-                          Employee
+                          employee
                         </th>
                         <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                          Role
+                          role
                         </th>
                         <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                          Hours
+                          hours
                         </th>
                         <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                          Cash Tips
+                          cash tips
                         </th>
                         <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                          Credit Tips
+                          credit tips
                         </th>
                         <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                          Bar Tipout
+                          bar tipout
                         </th>
                         <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                          Host Tipout
+                          host tipout
                         </th>
                         <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                          SA Tipout
+                          sa tipout
                         </th>
                         <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                          Payroll Tips
+                          payroll tips
                         </th>
                         <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                          Total Tips/Hour
+                          total tips/hour
                         </th>
                         <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                          Base Pay Rate
+                          base pay rate
                         </th>
                         <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                          Total $/Hour
+                          total $/hour
                         </th>
                       </tr>
                     </thead>
@@ -1498,7 +1498,7 @@ function ReportsContent() {
                                   : 'text-gray-500 dark:text-gray-400')
                               : 'text-gray-500 dark:text-gray-400'
                           }`}>
-                            ${summary.totalPayrollTips !== undefined ? summary.totalPayrollTips.toFixed(2) : 'N/A'}
+                            ${summary.totalPayrollTips !== undefined ? summary.totalPayrollTips.toFixed(2) : 'n/a'}
                           </td>
                           <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
                             ${summary.totalTipsPerHour.toFixed(2)}
@@ -1519,7 +1519,7 @@ function ReportsContent() {
           </div>
 
           <div className="mt-12 mb-8">
-            <h2 className="text-xl font-semibold text-[var(--foreground)] mb-6">Visualization & Analytics</h2>
+            <h2 className="text-xl font-semibold text-[var(--foreground)] mb-6">visualization & analytics</h2>
             <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
               <div className="bg-white/50 dark:bg-gray-800/50 p-4 sm:p-6 rounded-lg shadow border border-gray-200 dark:border-gray-700 transition-all hover:shadow-md h-[300px] sm:h-[400px]">
                 <TipoutBreakdownChart />

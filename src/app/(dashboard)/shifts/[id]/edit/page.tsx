@@ -181,9 +181,9 @@ export default function EditShiftPage({ params }: { params: Promise<{ id: string
       <div className="bg-white/50 dark:bg-gray-800/50 shadow sm:rounded-lg border border-gray-200 dark:border-gray-700 transition-all hover:shadow-md">
         <div className="px-4 py-5 sm:p-6">
           <div className="mb-8">
-            <h1 className="text-2xl font-semibold text-[var(--foreground)]">Edit Shift</h1>
+            <h1 className="text-2xl font-semibold text-[var(--foreground)]">edit shift</h1>
             <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-              Update shift information and recalculate tipouts.
+              update shift information and recalculate tipouts.
             </p>
           </div>
 
@@ -192,7 +192,7 @@ export default function EditShiftPage({ params }: { params: Promise<{ id: string
               onClick={() => setIsTipoutsExpanded(!isTipoutsExpanded)}
               className="flex items-center justify-between w-full text-left mb-4"
             >
-              <h3 className="text-base font-medium text-[var(--foreground)]">Calculated Tipouts</h3>
+              <h3 className="text-base font-medium text-[var(--foreground)]">calculated tipouts</h3>
               <svg
                 className={`w-5 h-5 transform transition-transform duration-200 ${isTipoutsExpanded ? 'rotate-180' : ''}`}
                 fill="none"
@@ -211,15 +211,15 @@ export default function EditShiftPage({ params }: { params: Promise<{ id: string
             >
               <div ref={contentRef} className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 mb-4">
                 <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
-                  <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Bar Tipout</dt>
+                  <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">bar tipout</dt>
                   <dd className="mt-1 text-2xl font-semibold text-[var(--foreground)]">${barTipout.toFixed(2)}</dd>
                 </div>
                 <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
-                  <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Host Tipout</dt>
+                  <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">host tipout</dt>
                   <dd className="mt-1 text-2xl font-semibold text-[var(--foreground)]">${hostTipout.toFixed(2)}</dd>
                 </div>
                 <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
-                  <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">SA Tipout</dt>
+                  <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">sa tipout</dt>
                   <dd className="mt-1 text-2xl font-semibold text-[var(--foreground)]">${saTipout.toFixed(2)}</dd>
                 </div>
               </div>

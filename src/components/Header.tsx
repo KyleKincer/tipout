@@ -8,12 +8,12 @@ import { usePathname } from 'next/navigation'
 import { UserButton, useUser } from '@clerk/nextjs'
 
 const navigation = [
-  { name: 'Home', href: '/' },
-  { name: 'Daily Entry', href: '/shifts/new' },
-  { name: 'Shifts', href: '/shifts' },
-  { name: 'Employees', href: '/employees' },
-  { name: 'Roles', href: '/roles' },
-  { name: 'Reports', href: '/reports' },
+  { name: 'home', href: '/' },
+  { name: 'daily entry', href: '/shifts/new' },
+  { name: 'shifts', href: '/shifts' },
+  { name: 'employees', href: '/employees' },
+  { name: 'roles', href: '/roles' },
+  { name: 'reports', href: '/reports' },
 ]
 
 function classNames(...classes: string[]) {
@@ -33,7 +33,7 @@ export default function Header() {
               <div className="flex">
                 <div className="flex flex-shrink-0 items-center">
                   <Link href="/" className="text-xl font-bold text-[var(--foreground)]">
-                    Tipout Manager
+                    tipout manager
                   </Link>
                 </div>
                 {isSignedIn && (

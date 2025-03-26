@@ -2,26 +2,26 @@ import Link from 'next/link'
 
 const features = [
   {
-    name: 'Daily Tipout Entry',
-    description: 'Enter daily shift information and calculate tipouts',
+    name: 'daily tipout entry',
+    description: 'enter daily shift information and calculate tipouts',
     href: '/shifts/new',
     icon: '📝',
   },
   {
-    name: 'Employees',
-    description: 'Manage employee information and roles',
+    name: 'employees',
+    description: 'manage employee information and roles',
     href: '/employees',
     icon: '👥',
   },
   {
-    name: 'Roles & Configuration',
-    description: 'Configure roles, pay rates, and tipout percentages',
+    name: 'roles & configuration',
+    description: 'configure roles, pay rates, and tipout percentages',
     href: '/roles',
     icon: '⚙️',
   },
   {
-    name: 'Reports',
-    description: 'View historical tipout data and reports',
+    name: 'reports',
+    description: 'view historical tipout data and reports',
     href: '/reports',
     icon: '📊',
   },
@@ -33,7 +33,7 @@ export default function Home() {
       <div className="mx-auto max-w-7xl py-24 sm:px-6 sm:py-32 lg:px-8">
         <div className="relative isolate overflow-hidden bg-[var(--background)] px-6 py-24 text-center shadow-2xl sm:rounded-3xl sm:px-16 border border-gray-200 dark:border-gray-800">
           <h2 className="mx-auto max-w-2xl text-3xl font-bold tracking-tight text-[var(--foreground)] sm:text-4xl">
-            Tipout Manager
+            tipout manager
           </h2>
           
           <div className="mx-auto mt-16 grid max-w-2xl grid-cols-1 gap-6 sm:grid-cols-2 lg:mx-0 lg:max-w-none lg:grid-cols-2 lg:gap-8">

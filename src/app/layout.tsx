@@ -8,8 +8,8 @@ import { Inter } from 'next/font/google'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'Tipout Manager',
-  description: 'Restaurant tipout calculation and management system',
+  title: 'tipout manager',
+  description: 'restaurant tipout calculation and management system',
 }
 
 export default function RootLayout({

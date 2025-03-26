@@ -18,7 +18,7 @@ export default function LoadingSpinner() {
         animate={{ opacity: 1 }}
         transition={{ delay: 0.2 }}
       >
-        Loading...
+        loading...
       </motion.p>
     </div>
   )

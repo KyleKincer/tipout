@@ -18,7 +18,7 @@ import {
   PointElement,
   LineElement
 } from 'chart.js'
-import { Bar, Pie, Doughnut } from 'react-chartjs-2'
+import { Bar, Doughnut } from 'react-chartjs-2'
 
 // Register Chart.js components
 ChartJS.register(
@@ -285,10 +285,6 @@ function ReportsContent() {
     const serverCreditTips = serverShifts.reduce((acc, shift) => acc + Number(shift.creditTips), 0)
 
     // Server tipouts breakdown
-    const serverBarTipouts = serverShifts.reduce((sum, shift) => {
-      const { barTipout } = calculateTipouts(shift, true, true)
-      return sum + barTipout
-    }, 0)
     
     const serverHostAndSATipouts = serverShifts.reduce((sum, shift) => {
       const { hostTipout, saTipout } = calculateTipouts(shift, true, true)
@@ -328,14 +324,6 @@ function ReportsContent() {
     const summaries = new Map<string, EmployeeRoleSummary>()
     
     // Group shifts by date to determine if hosts/SAs worked each day
-    const shiftsByDate = shifts.reduce((acc, shift) => {
-      const date = format(new Date(shift.date), 'yyyy-MM-dd')
-      if (!acc[date]) {
-        acc[date] = []
-      }
-      acc[date].push(shift)
-      return acc
-    }, {} as Record<string, Shift[]>)
 
     // Check if there's at least one host and SA
     const hasHost = shifts.some(shift => roleReceivesTipoutType(shift, 'host'))
@@ -607,7 +595,7 @@ function ReportsContent() {
     })
     
     // Normalize hourly rates within each distribution group
-    distributionGroups.forEach((groupSummaries, groupName) => {
+    distributionGroups.forEach((groupSummaries) => {
       // Skip groups with only one member - no need to normalize
       if (groupSummaries.length <= 1) return
       
@@ -677,41 +665,41 @@ function ReportsContent() {
         <h3 className="text-lg font-medium leading-6 text-[var(--foreground)] mb-4">Where Tips Go</h3>
         <div className="h-[calc(100%-2rem)] flex justify-center">
           <div className="w-full max-w-lg">
-            <Doughnut
-              data={data}
-              options={{
-                responsive: true,
+          <Doughnut
+            data={data}
+            options={{
+              responsive: true,
                 maintainAspectRatio: true,
                 aspectRatio: 1.5,
-                plugins: {
-                  legend: {
-                    position: 'right',
-                    labels: {
-                      boxWidth: 15,
-                      padding: 15,
+              plugins: {
+                legend: {
+                  position: 'right',
+                  labels: {
+                    boxWidth: 15,
+                    padding: 15,
                       color: 'var(--foreground)',
-                      font: {
-                        size: 12
-                      }
-                    }
-                  },
-                  tooltip: {
-                    titleColor: 'var(--foreground)',
-                    bodyColor: 'var(--foreground)',
-                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                    callbacks: {
-                      label: function(context) {
-                        const value = context.raw as number;
-                        const total = context.dataset.data.reduce((a, b) => (a as number) + (b as number), 0) as number;
-                        const percentage = Math.round((value / total) * 100);
-                        return `${context.label}: $${value.toFixed(2)} (${percentage}%)`;
-                      }
+                    font: {
+                      size: 12
                     }
                   }
                 },
-              }}
-            />
-          </div>
+                tooltip: {
+                    titleColor: 'var(--foreground)',
+                    bodyColor: 'var(--foreground)',
+                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                  callbacks: {
+                    label: function(context) {
+                      const value = context.raw as number;
+                      const total = context.dataset.data.reduce((a, b) => (a as number) + (b as number), 0) as number;
+                      const percentage = Math.round((value / total) * 100);
+                      return `${context.label}: $${value.toFixed(2)} (${percentage}%)`;
+                    }
+                  }
+                }
+              },
+            }}
+          />
+        </div>
         </div>
       </div>
     )
@@ -863,7 +851,7 @@ function ReportsContent() {
     const significantEmployees = employees.filter(emp => 
       employeeTipouts[emp].paid > 0 || employeeTipouts[emp].received > 0
     ).slice(0, 10); // Limit to top 10 for readability
-    
+
     const data = {
       labels: significantEmployees,
       datasets: [
@@ -883,7 +871,7 @@ function ReportsContent() {
         },
       ],
     };
-    
+
     return (
       <div className="h-full">
         <h3 className="text-lg font-medium leading-6 text-[var(--foreground)] mb-4">Tipout Flow by Employee</h3>
@@ -1061,137 +1049,6 @@ function ReportsContent() {
     )
   }
 
-  const TipoutCalculationExplainer = () => {
-    // Find an example server shift to use for demonstration
-    const serverShift = shifts.find(shift => {
-      return shift.role.configs.some(config => 
-        config.paysTipout !== false && config.receivesTipout !== true
-      );
-    });
-    
-    if (!serverShift) {
-      return null;
-    }
-    
-    // Find real tipout rates from the example shift
-    let barTipoutRate = 0;
-    let hostTipoutRate = 0;
-    let saTipoutRate = 0;
-    
-    serverShift.role.configs.forEach(config => {
-      if (config.tipoutType === 'bar') barTipoutRate = config.percentageRate;
-      if (config.tipoutType === 'host') hostTipoutRate = config.percentageRate;
-      if (config.tipoutType === 'sa') saTipoutRate = config.percentageRate;
-    });
-    
-    // Calculate example values
-    const exampleTotalTips = 100; // $100 in total tips
-    const exampleLiquorSales = 400; // $400 in liquor sales
-    
-    const exampleBarTipout = (exampleLiquorSales * barTipoutRate / 100).toFixed(2);
-    const exampleHostTipout = (exampleTotalTips * hostTipoutRate / 100).toFixed(2);
-    const exampleSATipout = (exampleTotalTips * saTipoutRate / 100).toFixed(2);
-    
-    const exampleTotalTipout = (
-      parseFloat(exampleBarTipout) + 
-      parseFloat(exampleHostTipout) + 
-      parseFloat(exampleSATipout)
-    ).toFixed(2);
-    
-    const exampleNetTips = (exampleTotalTips - parseFloat(exampleTotalTipout)).toFixed(2);
-    
-    return (
-      <div id="tipout-explainer" className="bg-white p-6 rounded-lg shadow mt-8 scroll-mt-16">
-        <h3 className="text-lg font-medium leading-6 text-gray-900 mb-4">How Tipouts Are Calculated</h3>
-        
-        <div className="space-y-6">
-          <div>
-            <h4 className="text-base font-medium text-gray-800">Example Scenario</h4>
-            <p className="text-sm text-gray-600 mt-1">
-              Let's say you had a great shift with the following:
-            </p>
-            <ul className="mt-2 text-sm text-gray-600 list-disc pl-5 space-y-1">
-              <li>Total tips: <span className="font-medium">${exampleTotalTips.toFixed(2)}</span></li>
-              <li>Liquor sales: <span className="font-medium">${exampleLiquorSales.toFixed(2)}</span></li>
-            </ul>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-gray-50 p-4 rounded-lg">
-              <h5 className="text-sm font-medium text-gray-800">Bar Tipout</h5>
-              <p className="text-xs text-gray-600 mt-1">
-                Bar tipout is calculated as <span className="font-medium">{barTipoutRate}%</span> of your total liquor sales.
-              </p>
-              <div className="mt-2 bg-white p-3 rounded border border-gray-200">
-                <p className="text-xs">
-                  ${exampleLiquorSales.toFixed(2)} × {barTipoutRate}% = <span className="font-medium text-red-600">${exampleBarTipout}</span>
-                </p>
-              </div>
-            </div>
-            
-            <div className="bg-gray-50 p-4 rounded-lg">
-              <h5 className="text-sm font-medium text-gray-800">Host Tipout</h5>
-              <p className="text-xs text-gray-600 mt-1">
-                Host tipout is calculated as <span className="font-medium">{hostTipoutRate}%</span> of your total tips.
-              </p>
-              <div className="mt-2 bg-white p-3 rounded border border-gray-200">
-                <p className="text-xs">
-                  ${exampleTotalTips.toFixed(2)} × {hostTipoutRate}% = <span className="font-medium text-red-600">${exampleHostTipout}</span>
-                </p>
-              </div>
-            </div>
-            
-            <div className="bg-gray-50 p-4 rounded-lg">
-              <h5 className="text-sm font-medium text-gray-800">SA Tipout</h5>
-              <p className="text-xs text-gray-600 mt-1">
-                SA tipout is calculated as <span className="font-medium">{saTipoutRate}%</span> of your total tips.
-              </p>
-              <div className="mt-2 bg-white p-3 rounded border border-gray-200">
-                <p className="text-xs">
-                  ${exampleTotalTips.toFixed(2)} × {saTipoutRate}% = <span className="font-medium text-red-600">${exampleSATipout}</span>
-                </p>
-              </div>
-            </div>
-          </div>
-          
-          <div className="bg-indigo-50 p-4 rounded-lg">
-            <h4 className="text-base font-medium text-indigo-800">Total Calculation</h4>
-            <div className="mt-2 space-y-2">
-              <div className="flex justify-between">
-                <span className="text-sm">Total Tips:</span>
-                <span className="text-sm font-medium">${exampleTotalTips.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-sm">Bar Tipout:</span>
-                <span className="text-sm font-medium text-red-600">- ${exampleBarTipout}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-sm">Host Tipout:</span>
-                <span className="text-sm font-medium text-red-600">- ${exampleHostTipout}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-sm">SA Tipout:</span>
-                <span className="text-sm font-medium text-red-600">- ${exampleSATipout}</span>
-              </div>
-              <div className="pt-2 border-t border-indigo-200 flex justify-between">
-                <span className="text-sm font-medium">Net Tips:</span>
-                <span className="text-sm font-medium text-green-600">${exampleNetTips}</span>
-              </div>
-            </div>
-          </div>
-          
-          <div>
-            <h4 className="text-base font-medium text-gray-800">Special Note on Credit Tips</h4>
-            <p className="text-sm text-gray-600 mt-1">
-              Credit card tips appear on your paycheck with tipouts already deducted. 
-              Cash tips are received directly, and you'll need to pay out the appropriate 
-              tipouts from your cash at the end of your shift.
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  };
 
   return (
     <div className="px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
@@ -1321,7 +1178,7 @@ function ReportsContent() {
           <div className="mt-6">
             <Link
               href="/shifts/new"
-              className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+              className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
             >
               Add a shift
             </Link>
@@ -1418,42 +1275,42 @@ function ReportsContent() {
           <div className="mt-12">
             <h2 className="text-xl font-semibold text-[var(--foreground)] mb-6">Detailed Analysis</h2>
             <div className="bg-white/50 dark:bg-gray-800/50 shadow sm:rounded-lg border border-gray-200 dark:border-gray-700">
-              <div className="px-4 py-5 sm:p-6">
+            <div className="px-4 py-5 sm:p-6">
                 <h3 className="text-lg font-medium leading-6 text-[var(--foreground)] mb-4">Tips Per Hour Summary</h3>
                 <div className="mt-4 grid grid-cols-1 gap-6 sm:grid-cols-2 sm:gap-8 sm:divide-x sm:divide-gray-200 dark:sm:divide-gray-700">
                   <div className="sm:pr-8">
-                    <h4 className="text-sm font-medium text-gray-500 dark:text-gray-400">Bar</h4>
-                    <dl className="mt-2 grid grid-cols-2 gap-4">
-                      <div>
-                        <dt className="text-sm text-gray-500 dark:text-gray-400">Cash Tips/Hour</dt>
+                  <h4 className="text-sm font-medium text-gray-500 dark:text-gray-400">Bar</h4>
+                  <dl className="mt-2 grid grid-cols-2 gap-4">
+                    <div>
+                      <dt className="text-sm text-gray-500 dark:text-gray-400">Cash Tips/Hour</dt>
                         <dd className="text-base sm:text-lg font-medium text-[var(--foreground)]">${summary.barCashTipsPerHour.toFixed(2)}</dd>
-                      </div>
-                      <div>
-                        <dt className="text-sm text-gray-500 dark:text-gray-400">Credit Tips/Hour</dt>
+                    </div>
+                    <div>
+                      <dt className="text-sm text-gray-500 dark:text-gray-400">Credit Tips/Hour</dt>
                         <dd className="text-base sm:text-lg font-medium text-[var(--foreground)]">${summary.barCreditTipsPerHour.toFixed(2)}</dd>
-                      </div>
-                      <div>
-                        <dt className="text-sm text-gray-500 dark:text-gray-400">Total Tips/Hour</dt>
+                    </div>
+                    <div>
+                      <dt className="text-sm text-gray-500 dark:text-gray-400">Total Tips/Hour</dt>
                         <dd className="text-base sm:text-lg font-medium text-[var(--foreground)]">${summary.barTipsPerHour.toFixed(2)}</dd>
-                      </div>
-                    </dl>
-                  </div>
+                    </div>
+                  </dl>
+                </div>
                   <div className="sm:pl-8">
-                    <h4 className="text-sm font-medium text-gray-500 dark:text-gray-400">Servers</h4>
-                    <dl className="mt-2 grid grid-cols-2 gap-4">
-                      <div>
-                        <dt className="text-sm text-gray-500 dark:text-gray-400">Cash Tips/Hour</dt>
+                  <h4 className="text-sm font-medium text-gray-500 dark:text-gray-400">Servers</h4>
+                  <dl className="mt-2 grid grid-cols-2 gap-4">
+                    <div>
+                      <dt className="text-sm text-gray-500 dark:text-gray-400">Cash Tips/Hour</dt>
                         <dd className="text-base sm:text-lg font-medium text-[var(--foreground)]">${summary.serverCashTipsPerHour.toFixed(2)}</dd>
-                      </div>
-                      <div>
-                        <dt className="text-sm text-gray-500 dark:text-gray-400">Credit Tips/Hour</dt>
+                    </div>
+                    <div>
+                      <dt className="text-sm text-gray-500 dark:text-gray-400">Credit Tips/Hour</dt>
                         <dd className="text-base sm:text-lg font-medium text-[var(--foreground)]">${summary.serverCreditTipsPerHour.toFixed(2)}</dd>
-                      </div>
-                      <div>
-                        <dt className="text-sm text-gray-500 dark:text-gray-400">Total Tips/Hour</dt>
+                    </div>
+                    <div>
+                      <dt className="text-sm text-gray-500 dark:text-gray-400">Total Tips/Hour</dt>
                         <dd className="text-base sm:text-lg font-medium text-[var(--foreground)]">${summary.serverTipsPerHour.toFixed(2)}</dd>
-                      </div>
-                    </dl>
+                    </div>
+                  </dl>
                   </div>
                 </div>
               </div>
@@ -1723,26 +1580,26 @@ function ReportsContent() {
             <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
               <div className="bg-white/50 dark:bg-gray-800/50 p-4 sm:p-6 rounded-lg shadow border border-gray-200 dark:border-gray-700 transition-all hover:shadow-md h-[300px] sm:h-[400px]">
                 <TipoutBreakdownChart />
-              </div>
-              
+          </div>
+
               <div className="bg-white/50 dark:bg-gray-800/50 p-4 sm:p-6 rounded-lg shadow border border-gray-200 dark:border-gray-700 transition-all hover:shadow-md h-[300px] sm:h-[400px]">
-                <TipoutPerHourChart />
-              </div>
+              <TipoutPerHourChart />
             </div>
+          </div>
 
             <div className="mt-8 grid grid-cols-1 gap-8 md:grid-cols-2">
               <div className="bg-white/50 dark:bg-gray-800/50 p-4 sm:p-6 rounded-lg shadow border border-gray-200 dark:border-gray-700 transition-all hover:shadow-md h-[300px] sm:h-[400px]">
-                <TipoutRatesChart />
-              </div>
-              
+              <TipoutRatesChart />
+          </div>
+
               <div className="bg-white/50 dark:bg-gray-800/50 p-4 sm:p-6 rounded-lg shadow border border-gray-200 dark:border-gray-700 transition-all hover:shadow-md h-[300px] sm:h-[400px]">
-                <TipoutContributionChart />
-              </div>
+              <TipoutContributionChart />
+            </div>
             </div>
           </div>
         </>
       )}
-    </div>
+            </div>
   )
 }
 

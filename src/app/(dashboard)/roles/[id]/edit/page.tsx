@@ -1,9 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { TrashIcon, PlusIcon } from '@heroicons/react/24/outline'
-import { format } from 'date-fns'
 import LoadingSpinner from '@/components/LoadingSpinner'
 
 type RoleConfig = {
@@ -32,19 +30,7 @@ export default function EditRolePage() {
   const tipoutTypes = ['bar', 'host', 'sa']
   const distributionGroups = ['bartenders', 'hosts', 'servers', 'support']
 
-  useEffect(() => {
-    if (params.id === 'new') {
-      // Creating a new role
-      setLoading(false)
-      return
-    }
-
-    // Fetch existing role
-    fetchRole()
-    fetchConfigs()
-  }, [params.id])
-
-  const fetchRole = async () => {
+  const fetchRole = useCallback(async () => {
     try {
       const response = await fetch(`/api/roles/${params.id}`)
       if (!response.ok) {
@@ -63,9 +49,9 @@ export default function EditRolePage() {
       console.error('Error fetching role:', err)
       setError(`Failed to load role data: ${err instanceof Error ? err.message : 'Unknown error'}`)
     }
-  }
+  }, [params.id])
 
-  const fetchConfigs = async () => {
+  const fetchConfigs = useCallback(async () => {
     try {
       const response = await fetch(`/api/roles/${params.id}/config`)
       if (!response.ok) {
@@ -75,7 +61,7 @@ export default function EditRolePage() {
       }
       
       const data = await response.json()
-      setConfigs(data.map((config: any) => ({
+      setConfigs(data.map((config: RoleConfig) => ({
         ...config,
         percentageRate: Number(config.percentageRate),
         effectiveFrom: new Date(config.effectiveFrom).toISOString().split('T')[0],
@@ -87,34 +73,19 @@ export default function EditRolePage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [params.id])
 
-  const handleConfigChange = (index: number, field: string, value: any) => {
-    const updatedConfigs = [...configs]
-    // @ts-ignore: Needed to set dynamic field
-    updatedConfigs[index][field] = value
-    setConfigs(updatedConfigs)
-  }
-
-  const addConfig = () => {
-    const today = format(new Date(), 'yyyy-MM-dd')
-    const newConfig: RoleConfig = {
-      tipoutType: 'bar',
-      percentageRate: 0,
-      effectiveFrom: today,
-      effectiveTo: null,
-      receivesTipout: false,
-      paysTipout: true,
-      distributionGroup: null
+  useEffect(() => {
+    if (params.id === 'new') {
+      // Creating a new role
+      setLoading(false)
+      return
     }
-    setConfigs([...configs, newConfig])
-  }
 
-  const removeConfig = (index: number) => {
-    const updatedConfigs = [...configs]
-    updatedConfigs.splice(index, 1)
-    setConfigs(updatedConfigs)
-  }
+    // Fetch existing role
+    fetchRole()
+    fetchConfigs()
+  }, [params.id, fetchRole, fetchConfigs])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

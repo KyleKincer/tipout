@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import { use } from 'react'
+import { XCircleIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline'
 
 type Role = {
   id: string
@@ -56,6 +57,17 @@ export default function EditEmployeePage({ params }: { params: Promise<{ id: str
     fetchData()
   }, [id])
 
+  const handleInputChange = (field: keyof Employee, value: string | boolean | null) => {
+    if (!employee) return
+
+    setEmployee({
+      id: employee.id,
+      name: field === 'name' ? value as string : employee.name,
+      active: field === 'active' ? value as boolean : employee.active,
+      defaultRoleId: field === 'defaultRoleId' ? value as string | null : employee.defaultRoleId
+    })
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!employee) return
@@ -88,107 +100,120 @@ export default function EditEmployeePage({ params }: { params: Promise<{ id: str
     }
   }
 
-  if (isLoading) {
-    return <LoadingSpinner />
-  }
-
-  if (error) {
-    return (
-      <div className="rounded-md bg-red-50 dark:bg-red-900/50 p-4">
-        <div className="flex">
-          <div className="ml-3">
-            <h3 className="text-sm font-medium text-red-800 dark:text-red-200">{error}</h3>
-          </div>
+  return (
+    <div className="px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
+      <div className="sm:flex sm:items-center">
+        <div className="sm:flex-auto">
+          <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">Edit Employee</h1>
+          <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
+            Update employee information and settings.
+          </p>
         </div>
       </div>
-    )
-  }
 
-  if (!employee) {
-    return <div>Employee not found</div>
-  }
+      {isLoading ? (
+        <div className="mt-8 flex justify-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500"></div>
+        </div>
+      ) : error ? (
+        <div className="mt-8 rounded-md bg-red-50 dark:bg-red-900/50 p-4">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <XCircleIcon className="h-5 w-5 text-red-400" aria-hidden="true" />
+            </div>
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-red-800 dark:text-red-200">{error}</h3>
+            </div>
+          </div>
+        </div>
+      ) : !employee ? (
+        <div className="mt-8 rounded-md bg-yellow-50 dark:bg-yellow-900/50 p-4">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <ExclamationTriangleIcon className="h-5 w-5 text-yellow-400" aria-hidden="true" />
+            </div>
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-yellow-800 dark:text-yellow-200">Employee not found</h3>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <form onSubmit={handleSubmit} className="mt-8 space-y-6">
+          <div className="bg-white dark:bg-gray-900 shadow sm:rounded-lg">
+            <div className="px-4 py-5 sm:p-6">
+              <div className="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6">
+                <div className="sm:col-span-4">
+                  <label htmlFor="name" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Name <span className="text-red-500">*</span>
+                  </label>
+                  <div className="mt-1">
+                    <input
+                      type="text"
+                      name="name"
+                      id="name"
+                      value={employee.name}
+                      onChange={(e) => handleInputChange('name', e.target.value)}
+                      className="block w-full rounded-md border-gray-300 shadow-sm px-3 py-2 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white"
+                      placeholder="Enter employee name"
+                      required
+                    />
+                  </div>
+                </div>
 
-  return (
-    <div>
-      <div className="mb-8">
-        <h1 className="text-2xl font-semibold text-[var(--foreground)]">Edit Employee</h1>
-        <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
-          Update employee information.
-        </p>
-      </div>
+                <div className="sm:col-span-3">
+                  <label htmlFor="status" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Status <span className="text-red-500">*</span>
+                  </label>
+                  <div className="mt-1">
+                    <select
+                      name="status"
+                      id="status"
+                      value={employee.active ? 'active' : 'inactive'}
+                      onChange={(e) => handleInputChange('active', e.target.value === 'active')}
+                      className="block w-full rounded-md border-gray-300 shadow-sm px-3 py-2 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white"
+                      required
+                    >
+                      <option value="active">Active</option>
+                      <option value="inactive">Inactive</option>
+                    </select>
+                  </div>
+                </div>
 
-      <div className="bg-white/50 dark:bg-gray-800/50 shadow sm:rounded-lg border border-gray-200 dark:border-gray-700">
-        <div className="px-4 py-5 sm:p-6">
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label htmlFor="name" className="block text-sm font-medium text-[var(--foreground)]">
-                Name
-              </label>
-              <div className="mt-1">
-                <input
-                  type="text"
-                  name="name"
-                  id="name"
-                  value={employee.name}
-                  onChange={(e) => setEmployee({ ...employee, name: e.target.value })}
-                  className="block w-full rounded-md border-gray-300 shadow-sm px-3 py-2 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white"
-                />
+                <div className="sm:col-span-3">
+                  <label htmlFor="defaultRole" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Default Role
+                  </label>
+                  <div className="mt-1">
+                    <select
+                      name="defaultRole"
+                      id="defaultRole"
+                      value={employee.defaultRoleId || ''}
+                      onChange={(e) => handleInputChange('defaultRoleId', e.target.value || null)}
+                      className="block w-full rounded-md border-gray-300 shadow-sm px-3 py-2 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white"
+                    >
+                      <option value="">No default role</option>
+                      {roles.map((role) => (
+                        <option key={role.id} value={role.id}>
+                          {role.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
               </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-[var(--foreground)]">
-                Status
-              </label>
-              <div className="mt-1">
-                <select
-                  value={employee.active ? 'active' : 'inactive'}
-                  onChange={(e) => setEmployee({ ...employee, active: e.target.value === 'active' })}
-                  className="block w-full rounded-md border-gray-300 shadow-sm px-3 py-2 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white"
-                >
-                  <option value="active">Active</option>
-                  <option value="inactive">Inactive</option>
-                </select>
-              </div>
-            </div>
-            <div>
-              <label htmlFor="defaultRole" className="block text-sm font-medium text-[var(--foreground)]">
-                Default Role
-              </label>
-              <div className="mt-1">
-                <select
-                  id="defaultRole"
-                  value={employee.defaultRoleId || ''}
-                  onChange={(e) => setEmployee({ ...employee, defaultRoleId: e.target.value || null })}
-                  className="block w-full rounded-md border-gray-300 shadow-sm px-3 py-2 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white"
-                >
-                  <option value="">No default role</option>
-                  {roles.map((role) => (
-                    <option key={role.id} value={role.id}>
-                      {role.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-            <div className="flex justify-end space-x-3">
-              <button
-                type="button"
-                onClick={() => router.push('/employees')}
-                className="rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-white dark:ring-gray-700 dark:hover:bg-gray-700"
-              >
-                Cancel
-              </button>
+            <div className="px-4 py-3 bg-gray-50 dark:bg-gray-800 text-right sm:px-6">
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="inline-flex justify-center rounded-md border border-transparent bg-indigo-600 py-2 px-4 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isSubmitting ? 'Saving...' : 'Save'}
+                {isSubmitting ? 'Saving...' : 'Save Changes'}
               </button>
             </div>
-          </form>
-        </div>
-      </div>
+          </div>
+        </form>
+      )}
     </div>
   )
 } 

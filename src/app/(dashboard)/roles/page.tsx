@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { PlusIcon } from '@heroicons/react/24/outline'
+import { PlusIcon, XCircleIcon } from '@heroicons/react/24/outline'
 import { format } from 'date-fns'
 import LoadingSpinner from '@/components/LoadingSpinner'
 
@@ -238,10 +238,10 @@ export default function RolesPage() {
   }
 
   return (
-    <div>
+    <div className="px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
       <div className="sm:flex sm:items-center">
         <div className="sm:flex-auto">
-          <h1 className="text-2xl font-semibold text-[var(--foreground)]">Roles</h1>
+          <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">Roles</h1>
           <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
             A list of all roles and their tipout configurations.
           </p>
@@ -262,8 +262,11 @@ export default function RolesPage() {
       </div>
 
       {error && (
-        <div className="mt-4 rounded-md bg-red-50 dark:bg-red-900/50 p-4">
+        <div className="mt-8 rounded-md bg-red-50 dark:bg-red-900/50 p-4">
           <div className="flex">
+            <div className="flex-shrink-0">
+              <XCircleIcon className="h-5 w-5 text-red-400" aria-hidden="true" />
+            </div>
             <div className="ml-3">
               <h3 className="text-sm font-medium text-red-800 dark:text-red-200">{error}</h3>
             </div>
@@ -272,43 +275,50 @@ export default function RolesPage() {
       )}
 
       {isAddingRole && (
-        <div className="mt-4 bg-white/50 dark:bg-gray-800/50 shadow sm:rounded-lg border border-gray-200 dark:border-gray-700">
+        <div className="mt-8 bg-white dark:bg-gray-900 shadow sm:rounded-lg">
           <div className="px-4 py-5 sm:p-6">
+            <h3 className="text-base font-medium text-gray-900 dark:text-white mb-4">Add New Role</h3>
             <form onSubmit={handleAddRole} className="space-y-4">
-              <div>
-                <label htmlFor="name" className="block text-sm font-medium text-[var(--foreground)]">
-                  Name
-                </label>
-                <div className="mt-1">
-                  <input
-                    type="text"
-                    name="name"
-                    id="name"
-                    value={newRole.name}
-                    onChange={(e) => setNewRole({ ...newRole, name: e.target.value })}
-                    className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white"
-                    placeholder="Enter role name"
-                  />
+              <div className="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6">
+                <div className="sm:col-span-4">
+                  <label htmlFor="name" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Name <span className="text-red-500">*</span>
+                  </label>
+                  <div className="mt-1">
+                    <input
+                      type="text"
+                      name="name"
+                      id="name"
+                      value={newRole.name}
+                      onChange={(e) => setNewRole({ ...newRole, name: e.target.value })}
+                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white"
+                      placeholder="Enter role name"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label htmlFor="basePayRate" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Base Pay Rate ($/hr) <span className="text-red-500">*</span>
+                  </label>
+                  <div className="mt-1">
+                    <input
+                      type="number"
+                      name="basePayRate"
+                      id="basePayRate"
+                      value={newRole.basePayRate}
+                      onChange={(e) => setNewRole({ ...newRole, basePayRate: e.target.value })}
+                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white"
+                      placeholder="Enter base pay rate"
+                      step="0.01"
+                      min="0"
+                      required
+                    />
+                  </div>
                 </div>
               </div>
-              <div>
-                <label htmlFor="basePayRate" className="block text-sm font-medium text-[var(--foreground)]">
-                  Base Pay Rate ($/hr)
-                </label>
-                <div className="mt-1">
-                  <input
-                    type="number"
-                    name="basePayRate"
-                    id="basePayRate"
-                    value={newRole.basePayRate}
-                    onChange={(e) => setNewRole({ ...newRole, basePayRate: e.target.value })}
-                    className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white"
-                    placeholder="Enter base pay rate"
-                    step="0.01"
-                    min="0"
-                  />
-                </div>
-              </div>
+
               <div className="flex justify-end space-x-3">
                 <button
                   type="button"
@@ -329,166 +339,330 @@ export default function RolesPage() {
         </div>
       )}
 
-      <div className="mt-8 flow-root">
-        <div className="-mx-4 -my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
-          <div className="inline-block min-w-full py-2 align-middle sm:px-6 lg:px-8">
-            <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 sm:rounded-lg border border-gray-200 dark:border-gray-700">
-              <table className="min-w-full divide-y divide-gray-300 dark:divide-gray-700">
-                <thead className="bg-gray-50/75 dark:bg-gray-800/75">
-                  <tr>
-                    <th scope="col" className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 dark:text-white sm:pl-6">
-                      Role
+      <div className="mt-8 bg-white/50 dark:bg-gray-800/50 shadow sm:rounded-lg border border-gray-200 dark:border-gray-700">
+        <div className="px-4 py-4 md:p-0">
+          {/* Table view for larger screens */}
+          <div className="hidden md:block">
+            <table className="min-w-full divide-y divide-gray-300 dark:divide-gray-700">
+              <thead className="bg-gray-50 dark:bg-gray-800">
+                <tr>
+                  <th scope="col" className="py-3 pl-6 pr-3 text-left text-sm font-semibold text-gray-900 dark:text-white">
+                    Role
+                  </th>
+                  <th scope="col" className="px-3 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">
+                    Base Pay Rate
+                  </th>
+                  {TIPOUT_TYPES.map((type) => (
+                    <th key={type.id} scope="col" className="px-3 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">
+                      {type.name}
                     </th>
-                    <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                      Base Pay Rate
-                    </th>
-                    {TIPOUT_TYPES.map((type) => (
-                      <th key={type.id} scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                        {type.name}
-                      </th>
-                    ))}
-                    <th scope="col" className="relative py-3.5 pl-3 pr-4 sm:pr-6">
-                      <span className="sr-only">Actions</span>
-                    </th>
+                  ))}
+                  <th scope="col" className="relative py-3 pl-3 pr-6">
+                    <span className="sr-only">Actions</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                {roles.map((role) => (
+                  <tr key={role.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                    <td className="whitespace-nowrap py-3 pl-6 pr-3 text-sm font-medium text-gray-900 dark:text-white">
+                      {role.name}
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-3 text-sm text-gray-500 dark:text-gray-400">
+                      {editingRole?.roleId === role.id ? (
+                        <form onSubmit={(e) => handleUpdateRolePayRate(e, role.id)} className="flex items-center space-x-2">
+                          <input
+                            type="number"
+                            value={editingRole.basePayRate}
+                            onChange={(e) => setEditingRole({ ...editingRole, basePayRate: e.target.value })}
+                            className="block w-24 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white"
+                            placeholder="Pay rate"
+                            step="0.01"
+                            min="0"
+                          />
+                          <button
+                            type="submit"
+                            className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300"
+                          >
+                            Save
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditingRole(null)}
+                            className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+                          >
+                            Cancel
+                          </button>
+                        </form>
+                      ) : (
+                        <div className="flex items-center space-x-2">
+                          <span>${role.basePayRate.toFixed(2)}/hr</span>
+                          <button
+                            onClick={() => setEditingRole({
+                              roleId: role.id,
+                              basePayRate: role.basePayRate.toString(),
+                            })}
+                            className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300 ml-2"
+                          >
+                            Edit
+                          </button>
+                        </div>
+                      )}
+                    </td>
+                    {TIPOUT_TYPES.map((type) => {
+                      const config = getActiveConfig(role, type.id)
+                      return (
+                        <td key={type.id} className="whitespace-nowrap px-3 py-3 text-sm text-gray-500 dark:text-gray-400">
+                          {editingConfig?.roleId === role.id && editingConfig?.tipoutType === type.id ? (
+                            <form onSubmit={(e) => handleAddConfig(e, role.id, type.id)} className="flex items-center space-x-2">
+                              <input
+                                type="number"
+                                value={editingConfig.percentageRate}
+                                onChange={(e) => setEditingConfig({ ...editingConfig, percentageRate: e.target.value })}
+                                className="block w-20 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white"
+                                placeholder="Rate %"
+                                step="0.01"
+                                min="0"
+                                max="100"
+                              />
+                              <button
+                                type="submit"
+                                className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300"
+                              >
+                                Save
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setEditingConfig(null)}
+                                className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+                              >
+                                Cancel
+                              </button>
+                            </form>
+                          ) : (
+                            <div className="flex items-center space-x-2">
+                              {config ? (
+                                <>
+                                  <span className="mr-2">{config.percentageRate}%</span>
+                                  <div className="flex space-x-2">
+                                    <button
+                                      onClick={() => setEditingConfig({
+                                        roleId: role.id,
+                                        tipoutType: type.id,
+                                        percentageRate: config.percentageRate.toString(),
+                                      })}
+                                      className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300"
+                                    >
+                                      Edit
+                                    </button>
+                                    <button
+                                      onClick={() => handleRemoveConfig(role.id, type.id)}
+                                      className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
+                                    >
+                                      Remove
+                                    </button>
+                                  </div>
+                                </>
+                              ) : (
+                                <button
+                                  onClick={() => setEditingConfig({
+                                    roleId: role.id,
+                                    tipoutType: type.id,
+                                    percentageRate: '',
+                                  })}
+                                  className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+                                >
+                                  Add
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </td>
+                      )
+                    })}
+                    <td className="relative whitespace-nowrap py-3 pl-3 pr-6 text-right text-sm font-medium">
+                      <a
+                        href={`/roles/${role.id}/edit`}
+                        className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300 mr-4"
+                      >
+                        Edit Role
+                      </a>
+                      <button
+                        onClick={() => handleDeleteRole(role.id)}
+                        className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
+                      >
+                        Delete
+                      </button>
+                    </td>
                   </tr>
-                </thead>
-                <tbody className="bg-white/50 dark:bg-gray-800/50 divide-y divide-gray-200 dark:divide-gray-700">
-                  {roles.map((role) => (
-                    <tr key={role.id}>
-                      <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-[var(--foreground)] sm:pl-6">
-                        {role.name}
-                      </td>
-                      <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
-                        {editingRole?.roleId === role.id ? (
-                          <form onSubmit={(e) => handleUpdateRolePayRate(e, role.id)} className="flex items-center space-x-2">
-                            <input
-                              type="number"
-                              value={editingRole.basePayRate}
-                              onChange={(e) => setEditingRole({ ...editingRole, basePayRate: e.target.value })}
-                              className="block w-24 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white"
-                              placeholder="Pay rate"
-                              step="0.01"
-                              min="0"
-                            />
-                            <button
-                              type="submit"
-                              className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300"
-                            >
-                              Save
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setEditingRole(null)}
-                              className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-                            >
-                              Cancel
-                            </button>
-                          </form>
-                        ) : (
-                          <div className="flex items-center space-x-2">
-                            <span>${role.basePayRate.toFixed(2)}/hr</span>
-                            <button
-                              onClick={() => setEditingRole({
-                                roleId: role.id,
-                                basePayRate: role.basePayRate.toString(),
-                              })}
-                              className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300 ml-2"
-                            >
-                              Edit
-                            </button>
-                          </div>
-                        )}
-                      </td>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Card view for mobile screens */}
+          <div className="md:hidden space-y-4 pb-4">
+            {roles.map((role) => (
+              <div
+                key={role.id}
+                className="bg-white dark:bg-gray-800 shadow rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden"
+              >
+                <div className="px-4 py-4">
+                  <div className="flex justify-between items-start">
+                    <h3 className="text-lg font-medium text-gray-900 dark:text-white">
+                      {role.name}
+                    </h3>
+                    <div className="flex space-x-2">
+                      <a
+                        href={`/roles/${role.id}/edit`}
+                        className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300 text-sm font-medium"
+                      >
+                        Edit Role
+                      </a>
+                      <button
+                        onClick={() => handleDeleteRole(role.id)}
+                        className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300 text-sm font-medium"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 border-t border-gray-200 dark:border-gray-700">
+                    <dl className="divide-y divide-gray-200 dark:divide-gray-700">
+                      <div className="py-4">
+                        <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                          Base Pay Rate
+                        </dt>
+                        <dd className="mt-1 flex justify-between items-center">
+                          {editingRole?.roleId === role.id ? (
+                            <form onSubmit={(e) => handleUpdateRolePayRate(e, role.id)} className="flex items-center space-x-2">
+                              <input
+                                type="number"
+                                value={editingRole.basePayRate}
+                                onChange={(e) => setEditingRole({ ...editingRole, basePayRate: e.target.value })}
+                                className="block w-24 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white"
+                                placeholder="Pay rate"
+                                step="0.01"
+                                min="0"
+                              />
+                              <button
+                                type="submit"
+                                className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300"
+                              >
+                                Save
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setEditingRole(null)}
+                                className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+                              >
+                                Cancel
+                              </button>
+                            </form>
+                          ) : (
+                            <div className="flex items-center justify-between w-full">
+                              <span className="text-sm text-gray-900 dark:text-white">${role.basePayRate.toFixed(2)}/hr</span>
+                              <button
+                                onClick={() => setEditingRole({
+                                  roleId: role.id,
+                                  basePayRate: role.basePayRate.toString(),
+                                })}
+                                className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300 text-sm font-medium"
+                              >
+                                Edit
+                              </button>
+                            </div>
+                          )}
+                        </dd>
+                      </div>
+
                       {TIPOUT_TYPES.map((type) => {
                         const config = getActiveConfig(role, type.id)
                         return (
-                          <td key={type.id} className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
-                            {editingConfig?.roleId === role.id && editingConfig?.tipoutType === type.id ? (
-                              <form onSubmit={(e) => handleAddConfig(e, role.id, type.id)} className="flex items-center space-x-2">
-                                <input
-                                  type="number"
-                                  value={editingConfig.percentageRate}
-                                  onChange={(e) => setEditingConfig({ ...editingConfig, percentageRate: e.target.value })}
-                                  className="block w-20 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white"
-                                  placeholder="Rate %"
-                                  step="0.01"
-                                  min="0"
-                                  max="100"
-                                />
-                                <button
-                                  type="submit"
-                                  className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300"
-                                >
-                                  Save
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setEditingConfig(null)}
-                                  className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-                                >
-                                  Cancel
-                                </button>
-                              </form>
-                            ) : (
-                              <div className="flex items-center space-x-2">
-                                {config ? (
-                                  <>
-                                    <span className="mr-2">{config.percentageRate}%</span>
-                                    <div className="flex space-x-2">
+                          <div key={type.id} className="py-4">
+                            <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                              {type.name}
+                              <span className="block text-xs text-gray-400 dark:text-gray-500 mt-0.5">
+                                {type.description}
+                              </span>
+                            </dt>
+                            <dd className="mt-1">
+                              {editingConfig?.roleId === role.id && editingConfig?.tipoutType === type.id ? (
+                                <form onSubmit={(e) => handleAddConfig(e, role.id, type.id)} className="flex items-center space-x-2">
+                                  <input
+                                    type="number"
+                                    value={editingConfig.percentageRate}
+                                    onChange={(e) => setEditingConfig({ ...editingConfig, percentageRate: e.target.value })}
+                                    className="block w-20 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white"
+                                    placeholder="Rate %"
+                                    step="0.01"
+                                    min="0"
+                                    max="100"
+                                  />
+                                  <button
+                                    type="submit"
+                                    className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300"
+                                  >
+                                    Save
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditingConfig(null)}
+                                    className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+                                  >
+                                    Cancel
+                                  </button>
+                                </form>
+                              ) : (
+                                <div className="flex items-center justify-between">
+                                  {config ? (
+                                    <>
+                                      <span className="text-sm text-gray-900 dark:text-white">{config.percentageRate}%</span>
+                                      <div className="flex space-x-2">
+                                        <button
+                                          onClick={() => setEditingConfig({
+                                            roleId: role.id,
+                                            tipoutType: type.id,
+                                            percentageRate: config.percentageRate.toString(),
+                                          })}
+                                          className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300 text-sm font-medium"
+                                        >
+                                          Edit
+                                        </button>
+                                        <button
+                                          onClick={() => handleRemoveConfig(role.id, type.id)}
+                                          className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300 text-sm font-medium"
+                                        >
+                                          Remove
+                                        </button>
+                                      </div>
+                                    </>
+                                  ) : (
+                                    <div className="flex justify-end w-full">
                                       <button
                                         onClick={() => setEditingConfig({
                                           roleId: role.id,
                                           tipoutType: type.id,
-                                          percentageRate: config.percentageRate.toString(),
+                                          percentageRate: '',
                                         })}
-                                        className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300"
+                                        className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300 text-sm font-medium"
                                       >
-                                        Edit
-                                      </button>
-                                      <button
-                                        onClick={() => handleRemoveConfig(role.id, type.id)}
-                                        className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
-                                      >
-                                        Remove
+                                        Add
                                       </button>
                                     </div>
-                                  </>
-                                ) : (
-                                  <button
-                                    onClick={() => setEditingConfig({
-                                      roleId: role.id,
-                                      tipoutType: type.id,
-                                      percentageRate: '',
-                                    })}
-                                    className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-                                  >
-                                    Add
-                                  </button>
-                                )}
-                              </div>
-                            )}
-                          </td>
+                                  )}
+                                </div>
+                              )}
+                            </dd>
+                          </div>
                         )
                       })}
-                      <td className="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
-                        <a
-                          href={`/roles/${role.id}/edit`}
-                          className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300 mr-4"
-                        >
-                          Edit Role
-                        </a>
-                        <button
-                          onClick={() => handleDeleteRole(role.id)}
-                          className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
-                        >
-                          Delete
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                    </dl>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </div>

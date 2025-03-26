@@ -100,7 +100,7 @@ export default function EmployeesPage() {
   }
 
   return (
-    <div>
+    <div className="px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
       <div className="sm:flex sm:items-center">
         <div className="sm:flex-auto">
           <h1 className="text-2xl font-semibold text-[var(--foreground)]">Employees</h1>
@@ -112,7 +112,7 @@ export default function EmployeesPage() {
           <button
             type="button"
             onClick={() => setIsAddingEmployee(true)}
-            className="block rounded-md bg-indigo-600 px-3 py-2 text-center text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+            className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
           >
             <PlusIcon className="h-5 w-5 inline-block mr-1" />
             Add employee
@@ -121,7 +121,7 @@ export default function EmployeesPage() {
       </div>
 
       {error && (
-        <div className="mt-4 rounded-md bg-red-50 dark:bg-red-900/50 p-4">
+        <div className="mt-8 rounded-md bg-red-50 dark:bg-red-900/50 p-4">
           <div className="flex">
             <div className="ml-3">
               <h3 className="text-sm font-medium text-red-800 dark:text-red-200">{error}</h3>
@@ -131,14 +131,15 @@ export default function EmployeesPage() {
       )}
 
       {isAddingEmployee && (
-        <div className="mt-4 bg-white/50 dark:bg-gray-800/50 shadow sm:rounded-lg border border-gray-200 dark:border-gray-700">
+        <div className="mt-8 bg-white/50 dark:bg-gray-800/50 shadow sm:rounded-lg border border-gray-200 dark:border-gray-700 transition-all hover:shadow-md">
           <div className="px-4 py-5 sm:p-6">
+            <h3 className="text-base font-medium text-[var(--foreground)] mb-4">Add New Employee</h3>
             <form onSubmit={handleAddEmployee} className="space-y-4">
               <div>
                 <label htmlFor="name" className="block text-sm font-medium text-[var(--foreground)]">
-                  Name
+                  Name <span className="text-red-500">*</span>
                 </label>
-                <div className="mt-1">
+                <div className="mt-2">
                   <input
                     type="text"
                     name="name"
@@ -171,12 +172,12 @@ export default function EmployeesPage() {
       )}
 
       {showDeleteConfirm && employeeToDelete && (
-        <div className="mt-4 bg-white/50 dark:bg-gray-800/50 shadow sm:rounded-lg border border-gray-200 dark:border-gray-700">
+        <div className="mt-8 bg-white/50 dark:bg-gray-800/50 shadow sm:rounded-lg border border-gray-200 dark:border-gray-700 transition-all hover:shadow-md">
           <div className="px-4 py-5 sm:p-6">
-            <h3 className="text-lg font-medium leading-6 text-[var(--foreground)]">
+            <h3 className="text-base font-medium text-[var(--foreground)] mb-4">
               Delete Employee
             </h3>
-            <div className="mt-2 max-w-xl text-sm text-gray-500 dark:text-gray-400">
+            <div className="mt-2 text-sm text-gray-500 dark:text-gray-400">
               <p>Are you sure you want to delete {employeeToDelete.name}? This action cannot be undone.</p>
             </div>
             <div className="mt-5 flex justify-end space-x-3">
@@ -202,68 +203,64 @@ export default function EmployeesPage() {
         </div>
       )}
 
-      <div className="mt-8 flow-root">
-        <div className="-mx-4 -my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
-          <div className="inline-block min-w-full py-2 align-middle sm:px-6 lg:px-8">
-            <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 sm:rounded-lg border border-gray-200 dark:border-gray-700">
-              <table className="min-w-full divide-y divide-gray-300 dark:divide-gray-700">
-                <thead className="bg-gray-50/75 dark:bg-gray-800/75">
-                  <tr>
-                    <th scope="col" className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 dark:text-white sm:pl-6">
-                      Name
-                    </th>
-                    <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                      Status
-                    </th>
-                    <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                      Default Role
-                    </th>
-                    <th scope="col" className="relative py-3.5 pl-3 pr-4 sm:pr-6">
-                      <span className="sr-only">Actions</span>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white/50 dark:bg-gray-800/50 divide-y divide-gray-200 dark:divide-gray-700">
-                  {employees.map((employee) => (
-                    <tr key={employee.id}>
-                      <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-[var(--foreground)] sm:pl-6">
-                        {employee.name}
-                      </td>
-                      <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
-                        <span className={`inline-flex rounded-full px-2 text-xs font-semibold leading-5 ${
-                          employee.active
-                            ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-200'
-                            : 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200'
-                        }`}>
-                          {employee.active ? 'Active' : 'Inactive'}
-                        </span>
-                      </td>
-                      <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
-                        {employee.defaultRole?.name || 'None'}
-                      </td>
-                      <td className="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
-                        <Link
-                          href={`/employees/${employee.id}/edit`}
-                          className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300 mr-4"
-                        >
-                          Edit
-                        </Link>
-                        <button
-                          onClick={() => {
-                            setEmployeeToDelete(employee)
-                            setShowDeleteConfirm(true)
-                          }}
-                          className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
-                        >
-                          Delete
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+      <div className="mt-8 bg-white/50 dark:bg-gray-800/50 shadow sm:rounded-lg border border-gray-200 dark:border-gray-700">
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-300 dark:divide-gray-700">
+            <thead className="bg-gray-50/75 dark:bg-gray-800/75">
+              <tr>
+                <th scope="col" className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 dark:text-white sm:pl-6">
+                  Name
+                </th>
+                <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
+                  Status
+                </th>
+                <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
+                  Default Role
+                </th>
+                <th scope="col" className="relative py-3.5 pl-3 pr-4 sm:pr-6">
+                  <span className="sr-only">Actions</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+              {employees.map((employee) => (
+                <tr key={employee.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                  <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-[var(--foreground)] sm:pl-6">
+                    {employee.name}
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-4 text-sm">
+                    <span className={`inline-flex rounded-full px-2 text-xs font-semibold leading-5 ${
+                      employee.active
+                        ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-200'
+                        : 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200'
+                    }`}>
+                      {employee.active ? 'Active' : 'Inactive'}
+                    </span>
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
+                    {employee.defaultRole?.name || 'None'}
+                  </td>
+                  <td className="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
+                    <Link
+                      href={`/employees/${employee.id}/edit`}
+                      className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300 mr-4"
+                    >
+                      Edit
+                    </Link>
+                    <button
+                      onClick={() => {
+                        setEmployeeToDelete(employee)
+                        setShowDeleteConfirm(true)
+                      }}
+                      className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
+                    >
+                      Delete
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>

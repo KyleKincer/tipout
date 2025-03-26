@@ -202,170 +202,190 @@ export default function ShiftEntryForm({ initialData, onSubmit }: ShiftEntryForm
     <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-6">
       <div className="bg-white/50 dark:bg-gray-800/50 shadow sm:rounded-lg border border-gray-200 dark:border-gray-700 transition-all hover:shadow-md">
         <div className="px-4 py-5 sm:p-6">
-          <div className="grid max-w-2xl grid-cols-1 gap-x-6 gap-y-8 sm:grid-cols-6">
-            <div className="sm:col-span-3">
-              <label htmlFor="employeeId" className="block text-sm font-medium text-[var(--foreground)]">
-                Employee <span className="text-red-500">*</span>
-              </label>
-              <div className="mt-2">
-                <select
-                  {...register('employeeId', { required: 'Employee is required' })}
-                  id="employeeId"
-                  className="block w-full rounded-md border-gray-300 shadow-sm px-3 py-2 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white"
-                >
-                  <option value="">Select employee...</option>
-                  {employees.map((employee) => (
-                    <option key={employee.id} value={employee.id}>
-                      {employee.name}
-                    </option>
-                  ))}
-                </select>
-                {errors.employeeId && (
-                  <p className="mt-2 text-sm text-red-600 dark:text-red-400">{errors.employeeId.message}</p>
-                )}
+          {/* Employee & Role Section */}
+          <div className="mb-8">
+            <h3 className="text-base font-medium text-[var(--foreground)] mb-4">Employee Information</h3>
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+              <div>
+                <label htmlFor="employeeId" className="block text-sm font-medium text-[var(--foreground)]">
+                  Employee <span className="text-red-500">*</span>
+                </label>
+                <div className="mt-2">
+                  <select
+                    {...register('employeeId', { required: 'Employee is required' })}
+                    id="employeeId"
+                    className="block w-full rounded-md border-gray-300 shadow-sm px-3 py-2 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white"
+                  >
+                    <option value="">Select employee...</option>
+                    {employees.map((employee) => (
+                      <option key={employee.id} value={employee.id}>
+                        {employee.name}
+                      </option>
+                    ))}
+                  </select>
+                  {errors.employeeId && (
+                    <p className="mt-2 text-sm text-red-600 dark:text-red-400">{errors.employeeId.message}</p>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <label htmlFor="roleId" className="block text-sm font-medium text-[var(--foreground)]">
+                  Role <span className="text-red-500">*</span>
+                </label>
+                <div className="mt-2">
+                  <select
+                    {...register('roleId', { required: 'Role is required' })}
+                    id="roleId"
+                    className="block w-full rounded-md border-gray-300 shadow-sm px-3 py-2 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white"
+                  >
+                    <option value="">Select role...</option>
+                    {roles.map((role) => (
+                      <option key={role.id} value={role.id}>
+                        {role.name}
+                      </option>
+                    ))}
+                  </select>
+                  {errors.roleId && (
+                    <p className="mt-2 text-sm text-red-600 dark:text-red-400">{errors.roleId.message}</p>
+                  )}
+                </div>
               </div>
             </div>
+          </div>
 
-            <div className="sm:col-span-3">
-              <label htmlFor="roleId" className="block text-sm font-medium text-[var(--foreground)]">
-                Role <span className="text-red-500">*</span>
-              </label>
-              <div className="mt-2">
-                <select
-                  {...register('roleId', { required: 'Role is required' })}
-                  id="roleId"
-                  className="block w-full rounded-md border-gray-300 shadow-sm px-3 py-2 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white"
-                >
-                  <option value="">Select role...</option>
-                  {roles.map((role) => (
-                    <option key={role.id} value={role.id}>
-                      {role.name}
-                    </option>
-                  ))}
-                </select>
-                {errors.roleId && (
-                  <p className="mt-2 text-sm text-red-600 dark:text-red-400">{errors.roleId.message}</p>
-                )}
+          {/* Shift Details Section */}
+          <div className="mb-8">
+            <h3 className="text-base font-medium text-[var(--foreground)] mb-4">Shift Details</h3>
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
+              <div>
+                <label htmlFor="date" className="block text-sm font-medium text-[var(--foreground)]">
+                  Date <span className="text-red-500">*</span>
+                </label>
+                <div className="mt-2">
+                  <input
+                    {...register('date', { required: 'Date is required' })}
+                    type="date"
+                    id="date"
+                    className="block w-full rounded-md border-gray-300 shadow-sm px-3 py-2 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white"
+                  />
+                  {errors.date && (
+                    <p className="mt-2 text-sm text-red-600 dark:text-red-400">{errors.date.message}</p>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <label htmlFor="hours" className="block text-sm font-medium text-[var(--foreground)]">
+                  Hours <span className="text-red-500">*</span>
+                </label>
+                <div className="mt-2">
+                  <input
+                    {...register('hours', {
+                      required: 'Hours are required',
+                      min: { value: 0, message: 'Hours must be positive' },
+                    })}
+                    type="number"
+                    step="0.01"
+                    id="hours"
+                    className="block w-full rounded-md border-gray-300 shadow-sm px-3 py-2 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white"
+                  />
+                  {errors.hours && (
+                    <p className="mt-2 text-sm text-red-600 dark:text-red-400">{errors.hours.message}</p>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <label htmlFor="liquorSales" className={`block text-sm font-medium ${!isFieldRequired('liquorSales') ? 'text-gray-400 dark:text-gray-500' : 'text-[var(--foreground)]'}`}>
+                  Liquor Sales {isFieldRequired('liquorSales') && <span className="text-red-500">*</span>}
+                </label>
+                <div className="mt-2">
+                  <input
+                    {...register('liquorSales', {
+                      required: isFieldRequired('liquorSales') ? 'Liquor sales amount is required' : false,
+                      min: { value: 0, message: 'Liquor sales must be positive' },
+                    })}
+                    type="number"
+                    step="0.01"
+                    id="liquorSales"
+                    disabled={!isFieldRequired('liquorSales')}
+                    className={`block w-full rounded-md shadow-sm px-3 py-2 sm:text-sm ${
+                      !isFieldRequired('liquorSales') 
+                      ? 'bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed opacity-60' 
+                      : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-[var(--foreground)] focus:border-indigo-500 focus:ring-indigo-500'
+                    }`}
+                  />
+                  {errors.liquorSales && (
+                    <p className="mt-2 text-sm text-red-600 dark:text-red-400">{errors.liquorSales.message}</p>
+                  )}
+                  <p className="mt-2 text-xs text-gray-500">{getFieldDescription('liquorSales')}</p>
+                </div>
               </div>
             </div>
+          </div>
 
-            <div className="sm:col-span-2">
-              <label htmlFor="date" className="block text-sm font-medium text-[var(--foreground)]">
-                Date <span className="text-red-500">*</span>
-              </label>
-              <div className="mt-2">
-                <input
-                  {...register('date', { required: 'Date is required' })}
-                  type="date"
-                  id="date"
-                  className="block w-full rounded-md border-gray-300 shadow-sm px-3 py-2 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white"
-                />
-                {errors.date && (
-                  <p className="mt-2 text-sm text-red-600 dark:text-red-400">{errors.date.message}</p>
-                )}
+          {/* Tips Section */}
+          <div>
+            <h3 className="text-base font-medium text-[var(--foreground)] mb-4">Tips</h3>
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+              <div>
+                <label htmlFor="cashTips" className={`block text-sm font-medium ${!isFieldRequired('cashTips') ? 'text-gray-400 dark:text-gray-500' : 'text-[var(--foreground)]'}`}>
+                  Cash Tips {isFieldRequired('cashTips') && <span className="text-red-500">*</span>}
+                </label>
+                <div className="mt-2">
+                  <input
+                    {...register('cashTips', {
+                      required: isFieldRequired('cashTips') ? 'Cash tips amount is required' : false,
+                      min: { value: 0, message: 'Cash tips must be positive' },
+                    })}
+                    type="number"
+                    step="0.01"
+                    id="cashTips"
+                    disabled={!isFieldRequired('cashTips')}
+                    className={`block w-full rounded-md shadow-sm px-3 py-2 sm:text-sm ${
+                      !isFieldRequired('cashTips') 
+                      ? 'bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed opacity-60' 
+                      : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-[var(--foreground)] focus:border-indigo-500 focus:ring-indigo-500'
+                    }`}
+                  />
+                  {errors.cashTips && (
+                    <p className="mt-2 text-sm text-red-600 dark:text-red-400">{errors.cashTips.message}</p>
+                  )}
+                  <p className="mt-2 text-xs text-gray-500">{getFieldDescription('cashTips')}</p>
+                </div>
               </div>
-            </div>
 
-            <div className="sm:col-span-2">
-              <label htmlFor="hours" className="block text-sm font-medium text-[var(--foreground)]">
-                Hours <span className="text-red-500">*</span>
-              </label>
-              <div className="mt-2">
-                <input
-                  {...register('hours', {
-                    required: 'Hours are required',
-                    min: { value: 0, message: 'Hours must be positive' },
-                  })}
-                  type="number"
-                  step="0.01"
-                  id="hours"
-                  className="block w-full rounded-md border-gray-300 shadow-sm px-3 py-2 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white"
-                />
-                {errors.hours && (
-                  <p className="mt-2 text-sm text-red-600 dark:text-red-400">{errors.hours.message}</p>
-                )}
-              </div>
-            </div>
-
-            <div className="sm:col-span-2">
-              <label htmlFor="cashTips" className={`block text-sm font-medium ${!isFieldRequired('cashTips') ? 'text-gray-400 dark:text-gray-500' : 'text-[var(--foreground)]'}`}>
-                Cash Tips {isFieldRequired('cashTips') && <span className="text-red-500">*</span>}
-              </label>
-              <div className="mt-2">
-                <input
-                  {...register('cashTips', {
-                    required: isFieldRequired('cashTips') ? 'Cash tips amount is required' : false,
-                    min: { value: 0, message: 'Cash tips must be positive' },
-                  })}
-                  type="number"
-                  step="0.01"
-                  id="cashTips"
-                  disabled={!isFieldRequired('cashTips')}
-                  className={`block w-full rounded-md shadow-sm px-3 py-2 sm:text-sm ${
-                    !isFieldRequired('cashTips') 
-                    ? 'bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed opacity-60' 
-                    : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-[var(--foreground)] focus:border-indigo-500 focus:ring-indigo-500'
-                  }`}
-                />
-                {errors.cashTips && (
-                  <p className="mt-2 text-sm text-red-600 dark:text-red-400">{errors.cashTips.message}</p>
-                )}
-              </div>
-            </div>
-
-            <div className="sm:col-span-2">
-              <label htmlFor="creditTips" className={`block text-sm font-medium ${!isFieldRequired('creditTips') ? 'text-gray-400 dark:text-gray-500' : 'text-[var(--foreground)]'}`}>
-                Credit Tips {isFieldRequired('creditTips') && <span className="text-red-500">*</span>}
-              </label>
-              <div className="mt-2">
-                <input
-                  {...register('creditTips', {
-                    required: isFieldRequired('creditTips') ? 'Credit tips amount is required' : false,
-                    min: { value: 0, message: 'Credit tips must be positive' },
-                  })}
-                  type="number"
-                  step="0.01"
-                  id="creditTips"
-                  disabled={!isFieldRequired('creditTips')}
-                  className={`block w-full rounded-md shadow-sm px-3 py-2 sm:text-sm ${
-                    !isFieldRequired('creditTips') 
-                    ? 'bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed opacity-60' 
-                    : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-[var(--foreground)] focus:border-indigo-500 focus:ring-indigo-500'
-                  }`}
-                />
-                {errors.creditTips && (
-                  <p className="mt-2 text-sm text-red-600 dark:text-red-400">{errors.creditTips.message}</p>
-                )}
-              </div>
-            </div>
-
-            <div className="sm:col-span-2">
-              <label htmlFor="liquorSales" className={`block text-sm font-medium ${!isFieldRequired('liquorSales') ? 'text-gray-400 dark:text-gray-500' : 'text-[var(--foreground)]'}`}>
-                Liquor Sales {isFieldRequired('liquorSales') && <span className="text-red-500">*</span>}
-              </label>
-              <div className="mt-2">
-                <input
-                  {...register('liquorSales', {
-                    required: isFieldRequired('liquorSales') ? 'Liquor sales amount is required' : false,
-                    min: { value: 0, message: 'Liquor sales must be positive' },
-                  })}
-                  type="number"
-                  step="0.01"
-                  id="liquorSales"
-                  disabled={!isFieldRequired('liquorSales')}
-                  className={`block w-full rounded-md shadow-sm px-3 py-2 sm:text-sm ${
-                    !isFieldRequired('liquorSales') 
-                    ? 'bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed opacity-60' 
-                    : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-[var(--foreground)] focus:border-indigo-500 focus:ring-indigo-500'
-                  }`}
-                />
-                {errors.liquorSales && (
-                  <p className="mt-2 text-sm text-red-600 dark:text-red-400">{errors.liquorSales.message}</p>
-                )}
+              <div>
+                <label htmlFor="creditTips" className={`block text-sm font-medium ${!isFieldRequired('creditTips') ? 'text-gray-400 dark:text-gray-500' : 'text-[var(--foreground)]'}`}>
+                  Credit Tips {isFieldRequired('creditTips') && <span className="text-red-500">*</span>}
+                </label>
+                <div className="mt-2">
+                  <input
+                    {...register('creditTips', {
+                      required: isFieldRequired('creditTips') ? 'Credit tips amount is required' : false,
+                      min: { value: 0, message: 'Credit tips must be positive' },
+                    })}
+                    type="number"
+                    step="0.01"
+                    id="creditTips"
+                    disabled={!isFieldRequired('creditTips')}
+                    className={`block w-full rounded-md shadow-sm px-3 py-2 sm:text-sm ${
+                      !isFieldRequired('creditTips') 
+                      ? 'bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed opacity-60' 
+                      : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-[var(--foreground)] focus:border-indigo-500 focus:ring-indigo-500'
+                    }`}
+                  />
+                  {errors.creditTips && (
+                    <p className="mt-2 text-sm text-red-600 dark:text-red-400">{errors.creditTips.message}</p>
+                  )}
+                  <p className="mt-2 text-xs text-gray-500">{getFieldDescription('creditTips')}</p>
+                </div>
               </div>
             </div>
           </div>
         </div>
+
         <div className="flex items-center justify-end gap-x-6 border-t border-gray-200 dark:border-gray-700 px-4 py-4 sm:px-6">
           <button
             type="button"

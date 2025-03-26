@@ -1,11 +1,12 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import ShiftEntryForm from '@/components/ShiftEntryForm'
 import { format } from 'date-fns'
 import { use } from 'react'
 import LoadingSpinner from '@/components/LoadingSpinner'
+import { calculateTipouts, roleReceivesTipoutType } from '@/utils/tipoutCalculations'
 
 type Employee = {
   id: string
@@ -41,36 +42,6 @@ type Shift = ShiftFormData & {
   role?: Role
 }
 
-// Helper function to calculate tipouts
-const calculateTipouts = (shift: Shift, hasHost: boolean, hasSA: boolean) => {
-  if (!shift.role?.configs) return { barTipout: 0, hostTipout: 0, saTipout: 0 }
-
-  const totalTips = Number(shift.cashTips) + Number(shift.creditTips)
-  let barTipout = 0
-  let hostTipout = 0
-  let saTipout = 0
-
-  shift.role.configs.forEach(config => {
-    switch (config.tipoutType) {
-      case 'bar':
-        barTipout = Number(shift.liquorSales) * (config.percentageRate / 100)
-        break
-      case 'host':
-        if (hasHost) {
-          hostTipout = totalTips * (config.percentageRate / 100)
-        }
-        break
-      case 'sa':
-        if (hasSA) {
-          saTipout = totalTips * (config.percentageRate / 100)
-        }
-        break
-    }
-  })
-
-  return { barTipout, hostTipout, saTipout }
-}
-
 export default function EditShiftPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params)
   const router = useRouter()
@@ -79,6 +50,15 @@ export default function EditShiftPage({ params }: { params: Promise<{ id: string
   const [error, setError] = useState<string | null>(null)
   const [hasHost, setHasHost] = useState(false)
   const [hasSA, setHasSA] = useState(false)
+  const [isTipoutsExpanded, setIsTipoutsExpanded] = useState(true)
+  const [contentHeight, setContentHeight] = useState<number | null>(null)
+  const contentRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (contentRef.current) {
+      setContentHeight(contentRef.current.scrollHeight)
+    }
+  }, [isTipoutsExpanded])
 
   useEffect(() => {
     const fetchShift = async () => {
@@ -89,10 +69,18 @@ export default function EditShiftPage({ params }: { params: Promise<{ id: string
           throw new Error('Failed to fetch shift')
         }
         const data = await response.json()
-        setShift(data)
+        // Format the date before setting the shift state, handling timezone properly
+        const shiftDate = new Date(data.date)
+        // Add timezone offset to get to local time
+        shiftDate.setMinutes(shiftDate.getMinutes() + shiftDate.getTimezoneOffset())
+        const formattedData = {
+          ...data,
+          date: format(shiftDate, 'yyyy-MM-dd')
+        }
+        setShift(formattedData)
 
         // Fetch all shifts for the same date
-        const date = format(new Date(data.date), 'yyyy-MM-dd')
+        const date = format(shiftDate, 'yyyy-MM-dd')
         const shiftsResponse = await fetch(`/api/shifts?startDate=${date}&endDate=${date}`)
         if (!shiftsResponse.ok) {
           throw new Error('Failed to fetch shifts')
@@ -100,8 +88,19 @@ export default function EditShiftPage({ params }: { params: Promise<{ id: string
         const shiftsData = await shiftsResponse.json()
 
         // Check if hosts/SAs worked that day
-        setHasHost(shiftsData.some((s: Shift) => s.role?.name.toLowerCase().includes('host')))
-        setHasSA(shiftsData.some((s: Shift) => s.role?.name.toLowerCase().includes('sa')))
+        const hasAnyHost = shiftsData.some((s: Shift) => 
+          s.role?.name?.toLowerCase().includes('host')
+        );
+        const hasAnySA = shiftsData.some((s: Shift) => 
+          s.role?.name?.toLowerCase().includes('sa')
+        );
+        
+        console.log('Found hosts/SAs by name?', { hasAnyHost, hasAnySA });
+        
+        setHasHost(hasAnyHost);
+        setHasSA(hasAnySA);
+        
+        console.log('Shifts for date:', shiftsData.length, 'shifts found');
       } catch (err) {
         setError('Failed to load shift')
         console.error('Error loading shift:', err)
@@ -147,31 +146,83 @@ export default function EditShiftPage({ params }: { params: Promise<{ id: string
   }
 
   const { barTipout, hostTipout, saTipout } = calculateTipouts(shift, hasHost, hasSA)
+  
+  // Debug logging
+  console.log('Final values used for calculation:', { 
+    hasHost, 
+    hasSA,
+    role: shift.role?.name,
+    configCount: shift.role?.configs?.length,
+    cashTips: shift.cashTips,
+    creditTips: shift.creditTips,
+    liquorSales: shift.liquorSales
+  });
+  
+  // Check for host tipout config specifically
+  const hasHostTipoutConfig = shift.role?.configs?.some(config => 
+    config.tipoutType === 'host'
+  );
+  
+  console.log('Host tipout configuration check:', {
+    hasHostTipoutConfig,
+    totalTips: Number(shift.cashTips) + Number(shift.creditTips),
+    hostConfigDetails: shift.role?.configs
+      ?.filter(config => config.tipoutType === 'host')
+      ?.map(config => ({
+        percentageRate: config.percentageRate,
+        tipoutType: config.tipoutType
+      }))
+  });
+  
+  console.log('Calculated tipouts:', { barTipout, hostTipout, saTipout });
 
   return (
-    <div>
-      <div className="mb-8">
-        <h1 className="text-2xl font-semibold text-gray-900">Edit Shift</h1>
-        <p className="mt-2 text-sm text-gray-700">
-          Update shift information and recalculate tipouts.
-        </p>
-      </div>
-
-      <div className="mb-8 bg-white shadow sm:rounded-lg">
+    <div className="space-y-6">
+      <div className="bg-white/50 dark:bg-gray-800/50 shadow sm:rounded-lg border border-gray-200 dark:border-gray-700 transition-all hover:shadow-md">
         <div className="px-4 py-5 sm:p-6">
-          <h3 className="text-lg font-medium leading-6 text-gray-900">Calculated Tipouts</h3>
-          <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <div>
-              <dt className="text-sm font-medium text-gray-500">Bar Tipout</dt>
-              <dd className="mt-1 text-sm text-gray-900">${barTipout.toFixed(2)}</dd>
-            </div>
-            <div>
-              <dt className="text-sm font-medium text-gray-500">Host Tipout</dt>
-              <dd className="mt-1 text-sm text-gray-900">${hostTipout.toFixed(2)}</dd>
-            </div>
-            <div>
-              <dt className="text-sm font-medium text-gray-500">SA Tipout</dt>
-              <dd className="mt-1 text-sm text-gray-900">${saTipout.toFixed(2)}</dd>
+          <div className="mb-8">
+            <h1 className="text-2xl font-semibold text-[var(--foreground)]">Edit Shift</h1>
+            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+              Update shift information and recalculate tipouts.
+            </p>
+          </div>
+
+          <div>
+            <button
+              onClick={() => setIsTipoutsExpanded(!isTipoutsExpanded)}
+              className="flex items-center justify-between w-full text-left mb-4"
+            >
+              <h3 className="text-base font-medium text-[var(--foreground)]">Calculated Tipouts</h3>
+              <svg
+                className={`w-5 h-5 transform transition-transform duration-200 ${isTipoutsExpanded ? 'rotate-180' : ''}`}
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            
+            <div 
+              className={`overflow-hidden transition-[height,opacity] duration-200 ease-in-out ${isTipoutsExpanded ? 'opacity-100' : 'opacity-0'}`}
+              style={{ 
+                height: isTipoutsExpanded ? (contentHeight ?? 'auto') : 0
+              }}
+            >
+              <div ref={contentRef} className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 mb-4">
+                <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+                  <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Bar Tipout</dt>
+                  <dd className="mt-1 text-2xl font-semibold text-[var(--foreground)]">${barTipout.toFixed(2)}</dd>
+                </div>
+                <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+                  <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Host Tipout</dt>
+                  <dd className="mt-1 text-2xl font-semibold text-[var(--foreground)]">${hostTipout.toFixed(2)}</dd>
+                </div>
+                <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+                  <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">SA Tipout</dt>
+                  <dd className="mt-1 text-2xl font-semibold text-[var(--foreground)]">${saTipout.toFixed(2)}</dd>
+                </div>
+              </div>
             </div>
           </div>
         </div>

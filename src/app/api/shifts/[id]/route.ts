@@ -1,12 +1,25 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { RoleConfiguration } from '@prisma/client'
+
+// Define types for prisma role configuration
+type RoleConfig = {
+  id: string;
+  tipoutType: string;
+  percentageRate: unknown;
+  effectiveFrom: Date;
+  effectiveTo: Date | null;
+  receivesTipout?: boolean;
+  paysTipout?: boolean;
+  distributionGroup?: string | null;
+  [key: string]: unknown;
+};
 
 export async function GET(
   request: Request,
   { params }: { params: { id: string } }
 ) {
   try {
+    // First, get the shift
     const shift = await prisma.shift.findUnique({
       where: {
         id: params.id,
@@ -24,6 +37,30 @@ export async function GET(
       )
     }
 
+    // Get the shift date to find appropriate configs
+    const shiftDate = new Date(shift.date)
+
+    // Now get the role configs that were active on the shift date
+    const roleConfigs = await prisma.roleConfig.findMany({
+      where: {
+        roleId: shift.roleId,
+        OR: [
+          { effectiveTo: null },
+          {
+            AND: [
+              { effectiveFrom: { lte: shiftDate } },
+              {
+                OR: [
+                  { effectiveTo: { gte: shiftDate } },
+                  { effectiveTo: null }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    })
+
     // Convert Decimal values to numbers for JSON serialization
     const serializedShift = {
       ...shift,
@@ -31,9 +68,14 @@ export async function GET(
       cashTips: Number(shift.cashTips),
       creditTips: Number(shift.creditTips),
       liquorSales: Number(shift.liquorSales),
-      barTipout: Number(shift.barTipout),
-      hostTipout: Number(shift.hostTipout),
-      saTipout: Number(shift.saTipout),
+      role: shift.role ? {
+        ...shift.role,
+        basePayRate: Number(shift.role.basePayRate),
+        configs: roleConfigs.map((config: RoleConfig) => ({
+          ...config,
+          percentageRate: Number(config.percentageRate)
+        }))
+      } : undefined
     }
 
     return NextResponse.json(serializedShift)

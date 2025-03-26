@@ -19,6 +19,7 @@ import {
   LineElement
 } from 'chart.js'
 import { Bar, Doughnut } from 'react-chartjs-2'
+import { calculateTipouts, roleReceivesTipoutType, rolePaysTipoutType, getRoleDistributionGroup } from '@/utils/tipoutCalculations'
 
 // Register Chart.js components
 ChartJS.register(
@@ -185,42 +186,6 @@ function ReportsContent() {
     }
   }
 
-  const calculateTipouts = (shift: Shift, hasHost: boolean, hasSA: boolean) => {
-    const totalTips = Number(shift.cashTips) + Number(shift.creditTips)
-    let barTipout = 0
-    let hostTipout = 0
-    let saTipout = 0
-
-    // Find the applicable configurations for this shift
-    shift.role.configs.forEach(config => {
-      // Only apply tipout if this role is configured to pay this type of tipout
-      const paysTipout = config.paysTipout !== false // default to true if not specified
-
-      if (!paysTipout) return
-
-      switch (config.tipoutType) {
-        case 'bar':
-          // Bar tipout is calculated based on liquor sales
-          barTipout = Number(shift.liquorSales) * (config.percentageRate / 100)
-          break
-        case 'host':
-          if (hasHost) {
-            // Host tipout is calculated based on total tips
-            hostTipout = totalTips * (config.percentageRate / 100)
-          }
-          break
-        case 'sa':
-          if (hasSA) {
-            // SA tipout is calculated based on total tips
-            saTipout = totalTips * (config.percentageRate / 100)
-          }
-          break
-      }
-    })
-
-    return { barTipout, hostTipout, saTipout }
-  }
-
   const calculateSummary = (): ReportSummary => {
     const summary: ReportSummary = {
       totalShifts: 0,
@@ -328,28 +293,6 @@ function ReportsContent() {
     // Check if there's at least one host and SA
     const hasHost = shifts.some(shift => roleReceivesTipoutType(shift, 'host'))
     const hasSA = shifts.some(shift => roleReceivesTipoutType(shift, 'sa'))
-
-    // Helper function to check if a role receives a specific tipout type
-    function roleReceivesTipoutType(shift: Shift, tipoutType: string): boolean {
-      return shift.role.configs.some(config => 
-        config.tipoutType === tipoutType && config.receivesTipout
-      )
-    }
-    
-    // Helper function to check if a role pays a specific tipout type
-    function rolePaysTipoutType(shift: Shift, tipoutType: string): boolean {
-      return shift.role.configs.some(config => 
-        config.tipoutType === tipoutType && config.paysTipout !== false
-      )
-    }
-
-    // Helper function to get a role's distribution group for a tipout type
-    function getRoleDistributionGroup(shift: Shift, tipoutType: string): string | null {
-      const config = shift.role.configs.find(c => 
-        c.tipoutType === tipoutType && c.receivesTipout && c.distributionGroup
-      )
-      return config?.distributionGroup || null
-    }
 
     // Calculate total tipouts across all dates
     const totalBarTipout = shifts.reduce((sum, shift) => {
@@ -677,15 +620,15 @@ function ReportsContent() {
                   labels: {
                     boxWidth: 15,
                     padding: 15,
-                      color: 'var(--foreground)',
+                      color: '#ffffff',
                     font: {
                       size: 12
                     }
                   }
                 },
                 tooltip: {
-                    titleColor: 'var(--foreground)',
-                    bodyColor: 'var(--foreground)',
+                    titleColor: '#ffffff',
+                    bodyColor: '#ffffff',
                     backgroundColor: 'rgba(0, 0, 0, 0.8)',
                   callbacks: {
                     label: function(context) {
@@ -777,12 +720,12 @@ function ReportsContent() {
                     color: 'rgba(255, 255, 255, 0.1)',
                   },
                   ticks: {
-                    color: 'var(--foreground)',
+                    color: '#ffffff',
                   },
                   title: {
                     display: true,
                     text: '$ Per Hour',
-                    color: 'var(--foreground)',
+                    color: '#ffffff',
                   }
                 },
                 x: {
@@ -790,20 +733,20 @@ function ReportsContent() {
                     color: 'rgba(255, 255, 255, 0.1)',
                   },
                   ticks: {
-                    color: 'var(--foreground)',
+                    color: '#ffffff',
                   }
                 }
               },
               plugins: {
                 legend: {
                   labels: {
-                    color: 'var(--foreground)',
+                    color: '#ffffff',
                     padding: 20,
                   }
                 },
                 tooltip: {
-                  titleColor: 'var(--foreground)',
-                  bodyColor: 'var(--foreground)',
+                  titleColor: '#ffffff',
+                  bodyColor: '#ffffff',
                   backgroundColor: 'rgba(0, 0, 0, 0.8)',
                   padding: 12,
                   callbacks: {
@@ -889,12 +832,12 @@ function ReportsContent() {
                     color: 'rgba(255, 255, 255, 0.1)',
                   },
                   ticks: {
-                    color: 'var(--foreground)',
+                    color: '#ffffff',
                   },
                   title: {
                     display: true,
                     text: 'Amount ($)',
-                    color: 'var(--foreground)',
+                    color: '#ffffff',
                   }
                 },
                 y: {
@@ -902,20 +845,20 @@ function ReportsContent() {
                     color: 'rgba(255, 255, 255, 0.1)',
                   },
                   ticks: {
-                    color: 'var(--foreground)',
+                    color: '#ffffff',
                   }
                 }
               },
               plugins: {
                 legend: {
                   labels: {
-                    color: 'var(--foreground)',
+                    color: '#ffffff',
                     padding: 20,
                   }
                 },
                 tooltip: {
-                  titleColor: 'var(--foreground)',
-                  bodyColor: 'var(--foreground)',
+                  titleColor: '#ffffff',
+                  bodyColor: '#ffffff',
                   backgroundColor: 'rgba(0, 0, 0, 0.8)',
                   padding: 12,
                   callbacks: {
@@ -1006,12 +949,12 @@ function ReportsContent() {
                     color: 'rgba(255, 255, 255, 0.1)',
                   },
                   ticks: {
-                    color: 'var(--foreground)',
+                    color: '#ffffff',
                   },
                   title: {
                     display: true,
                     text: 'Percentage (%)',
-                    color: 'var(--foreground)',
+                    color: '#ffffff',
                   }
                 },
                 x: {
@@ -1019,20 +962,20 @@ function ReportsContent() {
                     color: 'rgba(255, 255, 255, 0.1)',
                   },
                   ticks: {
-                    color: 'var(--foreground)',
+                    color: '#ffffff',
                   }
                 }
               },
               plugins: {
                 legend: {
                   labels: {
-                    color: 'var(--foreground)',
+                    color: '#ffffff',
                     padding: 20,
                   }
                 },
                 tooltip: {
-                  titleColor: 'var(--foreground)',
-                  bodyColor: 'var(--foreground)',
+                  titleColor: '#ffffff',
+                  bodyColor: '#ffffff',
                   backgroundColor: 'rgba(0, 0, 0, 0.8)',
                   padding: 12,
                   callbacks: {

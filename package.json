@@ -10,6 +10,7 @@
     "postinstall": "prisma generate"
   },
   "dependencies": {
+    "@clerk/nextjs": "^6.12.10",
     "@headlessui/react": "^2.2.0",
     "@heroicons/react": "^2.2.0",
     "@prisma/client": "^6.5.0",

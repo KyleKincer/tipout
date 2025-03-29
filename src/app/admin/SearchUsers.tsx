@@ -16,9 +16,9 @@ export const SearchUsers = () => {
           const queryTerm = formData.get('search') as string
           router.push(pathname + '?search=' + queryTerm)
         }}
-        className="flex gap-2 items-end"
+        className="flex flex-col sm:flex-row gap-2 sm:items-end"
       >
-        <div>
+        <div className="flex-grow">
           <label htmlFor="search" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
             search for users
           </label>
@@ -31,7 +31,7 @@ export const SearchUsers = () => {
         </div>
         <button 
           type="submit" 
-          className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          className="inline-flex items-center justify-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
         >
           search
         </button>

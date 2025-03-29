@@ -1,5 +1,8 @@
+'use client'
+
 import Link from 'next/link'
 import { AdminOnly } from '@/components/RoleBasedUI'
+import { useUser } from '@clerk/nextjs'
 
 const features = [
   {
@@ -29,20 +32,31 @@ const features = [
 ]
 
 export default function Home() {
+  const { isSignedIn } = useUser()
+  
   return (
     <div className="bg-[var(--background)] min-h-screen">
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-12 lg:px-8">
         <div className="relative isolate overflow-hidden bg-[var(--background)] px-4 py-10 sm:py-16 text-center shadow-2xl sm:rounded-3xl sm:px-16 border border-gray-200 dark:border-gray-800">
-          <AdminOnly>
-            <div className="absolute top-4 right-4 sm:top-6 sm:right-6">
+          <div className="absolute top-4 right-4 sm:top-6 sm:right-6 flex items-center space-x-4">
+            {!isSignedIn && (
+              <Link
+                href="/sign-in"
+                className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+              >
+                Sign in
+              </Link>
+            )}
+            
+            <AdminOnly>
               <Link 
                 href="/admin" 
                 className="text-xs sm:text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
               >
                 Admin ⚡
               </Link>
-            </div>
-          </AdminOnly>
+            </AdminOnly>
+          </div>
           
           <h2 className="mx-auto max-w-2xl text-2xl font-bold tracking-tight text-[var(--foreground)] sm:text-3xl lg:text-4xl">
             tipout manager

@@ -7,7 +7,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { UserButton, useUser } from '@clerk/nextjs'
 import { AdminOnly } from './RoleBasedUI'
-
+import { dark } from '@clerk/themes'
 const navigation = [
   { name: 'home', href: '/' },
   { name: 'daily entry', href: '/shifts/new' },
@@ -73,7 +73,7 @@ export default function Header() {
               </div>
               <div className="flex items-center">
                 {isSignedIn ? (
-                  <UserButton afterSignOutUrl="/sign-in" />
+                  <UserButton afterSignOutUrl="/sign-in" appearance={{ baseTheme: dark }} />
                 ) : (
                   <Link
                     href="/sign-in"

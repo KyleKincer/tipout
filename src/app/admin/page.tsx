@@ -3,8 +3,19 @@ import { SearchUsers } from './SearchUsers'
 import { clerkClient, auth } from '@clerk/nextjs/server'
 import { assignRole, removeRole } from '@/app/actions/userActions'
 import { UserRole, isAdmin } from '@/lib/roles'
-import Image from 'next/image'
+import { Suspense } from 'react'
 import ManageInvitations from './ManageInvitations'
+import { UserItem } from './components/UserItem'
+
+// Type for serialized user data
+type SerializedUser = {
+  id: string;
+  firstName: string | null;
+  lastName: string | null;
+  imageUrl: string | null;
+  emailAddress: string | null;
+  roles: string[];
+};
 
 // Helper function to generate initials from first and last name
 function getInitials(firstName: string | null, lastName: string | null): string {
@@ -25,6 +36,83 @@ function getColorFromUserId(userId: string): string {
   return colors[hash % colors.length];
 }
 
+// UserList component with Suspense support
+type UsersListProps = {
+  searchQuery: string
+}
+
+async function UsersList({ searchQuery }: UsersListProps) {
+  const clerk = await clerkClient();
+  
+  // If search query is provided, search for matching users, otherwise get all users
+  const users = searchQuery 
+    ? (await clerk.users.getUserList({ query: searchQuery })).data 
+    : (await clerk.users.getUserList()).data;
+
+  // Serialize users to avoid passing non-serializable data to client components
+  const serializedUsers: SerializedUser[] = users.map(user => ({
+    id: user.id,
+    firstName: user.firstName,
+    lastName: user.lastName,
+    imageUrl: user.imageUrl,
+    emailAddress: user.emailAddresses.find(email => email.id === user.primaryEmailAddressId)?.emailAddress || null,
+    roles: (user.publicMetadata?.roles as string[]) || []
+  }));
+
+  return (
+    <div className="mt-4 bg-white/50 dark:bg-gray-800/50 shadow overflow-hidden sm:rounded-md border border-gray-200 dark:border-gray-700">
+      <ul className="divide-y divide-gray-200 dark:divide-gray-700">
+        {serializedUsers.length === 0 ? (
+          <li className="px-6 py-4 text-center text-sm text-gray-500 dark:text-gray-400">
+            No users found. Try a different search.
+          </li>
+        ) : (
+          serializedUsers.map((user) => (
+            <UserItem 
+              key={user.id}
+              user={user}
+              assignRole={assignRole}
+              removeRole={removeRole}
+              userRoleEnum={UserRole}
+            />
+          ))
+        )}
+      </ul>
+    </div>
+  );
+}
+
+// Loading skeleton for UsersList
+function UsersListLoading() {
+  return (
+    <div className="mt-4 bg-white/50 dark:bg-gray-800/50 shadow overflow-hidden sm:rounded-md border border-gray-200 dark:border-gray-700 animate-pulse">
+      <ul className="divide-y divide-gray-200 dark:divide-gray-700">
+        {[...Array(5)].map((_, i) => (
+          <li key={i} className="px-6 py-4">
+            <div className="flex flex-col sm:flex-row sm:items-center">
+              <div className="flex items-center mb-3 sm:mb-0">
+                <div className="flex-shrink-0 mr-4">
+                  <div className="h-10 w-10 rounded-full bg-gray-200 dark:bg-gray-700"></div>
+                </div>
+                <div>
+                  <div className="h-4 w-32 bg-gray-200 dark:bg-gray-700 rounded mb-2"></div>
+                  <div className="h-3 w-40 bg-gray-200 dark:bg-gray-700 rounded mb-2"></div>
+                  <div className="h-3 w-24 bg-gray-200 dark:bg-gray-700 rounded"></div>
+                </div>
+              </div>
+              <div className="flex flex-col sm:flex-row sm:space-x-2 space-y-2 sm:space-y-0 sm:ml-auto mt-3 sm:mt-0">
+                <div className="h-8 w-24 bg-gray-200 dark:bg-gray-700 rounded"></div>
+                <div className="h-8 w-24 bg-gray-200 dark:bg-gray-700 rounded"></div>
+                <div className="h-8 w-24 bg-gray-200 dark:bg-gray-700 rounded"></div>
+              </div>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 type PageProps = {
   searchParams: { search?: string }
 }
@@ -39,17 +127,11 @@ export default async function AdminPage({ searchParams }: PageProps) {
   }
 
   // Get search query from searchParams
-  const clerk = await clerkClient();
   const searchQuery = typeof searchParams.search === 'string' ? searchParams.search : '';
-
-  // If search query is provided, search for matching users, otherwise get all users
-  const users = searchQuery 
-    ? (await clerk.users.getUserList({ query: searchQuery })).data 
-    : (await clerk.users.getUserList()).data;
 
   return (
     <div className="px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto pb-12">
-      {/* Invitation Management Section */}
+      {/* Invitation Management Section with Suspense */}
       <ManageInvitations />
 
       {/* Users Management Section */}
@@ -63,97 +145,10 @@ export default async function AdminPage({ searchParams }: PageProps) {
         </div>
       </div>
 
-      <div className="mt-4 bg-white/50 dark:bg-gray-800/50 shadow overflow-hidden sm:rounded-md border border-gray-200 dark:border-gray-700">
-        <ul className="divide-y divide-gray-200 dark:divide-gray-700">
-          {users.map((user) => {
-            const userRoles = (user.publicMetadata?.roles as string[]) || [];
-            const hasProfileImage = !!user.imageUrl;
-            const initials = getInitials(user.firstName, user.lastName);
-            const bgColorClass = getColorFromUserId(user.id);
-            
-            return (
-              <li key={user.id} className="px-6 py-4">
-                <div className="flex flex-col sm:flex-row sm:items-center">
-                  <div className="flex items-center mb-3 sm:mb-0">
-                    <div className="flex-shrink-0 mr-4">
-                      {hasProfileImage ? (
-                        <div className="h-10 w-10 rounded-full overflow-hidden relative">
-                          <div className={`absolute inset-0 flex items-center justify-center text-white ${bgColorClass}`}>
-                            {initials}
-                          </div>
-                          <Image 
-                            src={user.imageUrl}
-                            alt={`${user.firstName || ''} ${user.lastName || ''}`}
-                            width={40}
-                            height={40}
-                            className="h-full w-full object-cover relative z-10"
-                            unoptimized
-                          />
-                        </div>
-                      ) : (
-                        <div className={`h-10 w-10 rounded-full flex items-center justify-center text-white ${bgColorClass}`}>
-                          {initials}
-                        </div>
-                      )}
-                    </div>
-                  
-                    <div>
-                      <div className="text-sm font-medium text-[var(--foreground)]">
-                        {user.firstName} {user.lastName}
-                      </div>
-                      <div className="text-sm text-gray-500 dark:text-gray-400">
-                        {user.emailAddresses.find((email) => email.id === user.primaryEmailAddressId)?.emailAddress}
-                      </div>
-                      <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                        <span className="font-medium">Roles:</span> {userRoles.length > 0 ? userRoles.join(", ") : "No roles assigned"}
-                      </div>
-                    </div>
-                  </div>
-                    
-                  <div className="flex flex-col sm:flex-row sm:space-x-2 space-y-2 sm:space-y-0 sm:ml-auto mt-3 sm:mt-0">
-                    <form action={assignRole}>
-                      <input type="hidden" value={user.id} name="userId" />
-                      <input type="hidden" value={UserRole.ADMIN} name="role" />
-                      <button 
-                        type="submit"
-                        className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 w-full sm:w-auto"
-                        disabled={userRoles.includes(UserRole.ADMIN)}
-                      >
-                        Make Admin
-                      </button>
-                    </form>
-                    
-                    <form action={assignRole}>
-                      <input type="hidden" value={user.id} name="userId" />
-                      <input type="hidden" value={UserRole.USER} name="role" />
-                      <button 
-                        type="submit"
-                        className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 w-full sm:w-auto"
-                        disabled={userRoles.includes(UserRole.USER)}
-                      >
-                        Make User
-                      </button>
-                    </form>
-                    
-                    {userRoles.map((role) => (
-                      <form key={role} action={removeRole}>
-                        <input type="hidden" value={user.id} name="userId" />
-                        <input type="hidden" value={role} name="role" />
-                        <button 
-                          type="submit"
-                          className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 w-full sm:w-auto"
-                        >
-                          Remove {role}
-                        </button>
-                      </form>
-                    ))}
-                  </div>
-                </div>
-              </li>
-            );
-          })}
-        </ul>
-      </div>
+      {/* User list with Suspense for loading state */}
+      <Suspense fallback={<UsersListLoading />}>
+        <UsersList searchQuery={searchQuery} />
+      </Suspense>
     </div>
   )
 } 

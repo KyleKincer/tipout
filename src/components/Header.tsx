@@ -6,6 +6,7 @@ import { Bars3Icon, XMarkIcon } from '@heroicons/react/24/outline'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { UserButton, useUser } from '@clerk/nextjs'
+import { AdminOnly } from './RoleBasedUI'
 
 const navigation = [
   { name: 'home', href: '/' },
@@ -52,6 +53,21 @@ export default function Header() {
                         {item.name}
                       </Link>
                     ))}
+                    
+                    {/* Admin link - only shown to admin users */}
+                    <AdminOnly>
+                      <Link
+                        href="/admin"
+                        className={classNames(
+                          pathname.startsWith('/admin')
+                            ? 'border-indigo-500 text-[var(--foreground)]'
+                            : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300',
+                          'inline-flex items-center border-b-2 px-1 pt-1 text-sm font-medium'
+                        )}
+                      >
+                        admin
+                      </Link>
+                    </AdminOnly>
                   </div>
                 )}
               </div>
@@ -97,6 +113,24 @@ export default function Header() {
                   {item.name}
                 </Disclosure.Button>
               ))}
+              
+              {/* Admin link in mobile menu - only shown to admin users */}
+              {isSignedIn && (
+                <AdminOnly>
+                  <Disclosure.Button
+                    as={Link}
+                    href="/admin"
+                    className={classNames(
+                      pathname.startsWith('/admin')
+                        ? 'border-indigo-500 bg-indigo-50 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300'
+                        : 'border-transparent text-gray-600 hover:border-gray-300 hover:bg-gray-50 hover:text-gray-800 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-300',
+                      'block border-l-4 py-2 pl-3 pr-4 text-base font-medium'
+                    )}
+                  >
+                    admin
+                  </Disclosure.Button>
+                </AdminOnly>
+              )}
             </div>
           </Disclosure.Panel>
         </>

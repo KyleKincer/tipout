@@ -11,14 +11,14 @@ function AdminNavigation() {
         <div className="flex h-16 justify-between items-center">
           <div className="flex items-center">
             <Link href="/admin" className="text-xl font-bold text-gray-900 dark:text-white">
-              Admin Dashboard
+              admin
             </Link>
           </div>
           <Link
             href="/"
             className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
           >
-            Back to Main App
+            back
           </Link>
         </div>
       </div>
@@ -41,7 +41,7 @@ export default async function AdminLayout({
   return (
     <div className="min-h-full">
       <AdminNavigation />
-      <div className="py-6">
+      <div className="py-2">
         {children}
       </div>
     </div>

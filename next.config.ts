@@ -12,6 +12,9 @@ const nextConfig: NextConfig = {
     // your project has TypeScript errors.
     ignoreBuildErrors: true,
   },
+  images: {
+    domains: ['img.clerk.com', 'images.clerk.dev'],
+  },
 };
 
 export default nextConfig;

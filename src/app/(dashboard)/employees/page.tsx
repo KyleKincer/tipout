@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { PlusIcon, TrashIcon } from '@heroicons/react/24/outline'
 import Link from 'next/link'
 import LoadingSpinner from '@/components/LoadingSpinner'
+import { AdminOnly } from '@/components/RoleBasedUI'
 
 type Role = {
   id: string
@@ -108,16 +109,18 @@ export default function EmployeesPage() {
             a list of all employees in your restaurant.
           </p>
         </div>
-        <div className="mt-4 sm:ml-16 sm:mt-0 sm:flex-none">
-          <button
-            type="button"
+        <AdminOnly>
+          <div className="mt-4 sm:ml-16 sm:mt-0 sm:flex-none">
+            <button
+              type="button"
             onClick={() => setIsAddingEmployee(true)}
             className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
           >
             <PlusIcon className="h-5 w-5 inline-block mr-1" />
-            add employee
-          </button>
-        </div>
+              add employee
+            </button>
+          </div>
+        </AdminOnly>
       </div>
 
       {error && (
@@ -240,6 +243,7 @@ export default function EmployeesPage() {
                   <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
                     {employee.defaultRole?.name || 'none'}
                   </td>
+                  <AdminOnly>
                   <td className="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
                     <Link
                       href={`/employees/${employee.id}/edit`}
@@ -257,6 +261,7 @@ export default function EmployeesPage() {
                       delete
                     </button>
                   </td>
+                  </AdminOnly>
                 </tr>
               ))}
             </tbody>

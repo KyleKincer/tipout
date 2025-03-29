@@ -5,6 +5,7 @@ import { format } from 'date-fns'
 import Link from 'next/link'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import LoadingSpinner from '@/components/LoadingSpinner'
+import { AdminOnly } from '@/components/RoleBasedUI'
 
 type Employee = {
   id: string
@@ -390,9 +391,11 @@ function ShiftsContent() {
                   <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
                     sa tipout
                   </th>
-                  <th scope="col" className="relative py-3.5 pl-3 pr-4 sm:pr-6">
-                    actions
-                  </th>
+                  <AdminOnly>
+                    <th scope="col" className="relative py-3.5 pl-3 pr-4 sm:pr-6">
+                      actions
+                    </th>
+                  </AdminOnly>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
@@ -439,20 +442,22 @@ function ShiftsContent() {
                       <td className={`whitespace-nowrap px-3 py-4 text-sm ${saTipout !== 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-500 dark:text-gray-400'}`}>
                         ${saTipout.toFixed(2)}
                       </td>
-                      <td className="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
-                        <Link
-                          href={`/shifts/${shift.id}/edit`}
-                          className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300 mr-4"
-                        >
-                          edit
-                        </Link>
-                        <button
-                          onClick={() => handleDelete(shift.id)}
-                          className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
-                        >
-                          delete
-                        </button>
-                      </td>
+                      <AdminOnly>
+                        <td className="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
+                          <Link
+                            href={`/shifts/${shift.id}/edit`}
+                            className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300 mr-4"
+                          >
+                            edit
+                          </Link>
+                          <button
+                            onClick={() => handleDelete(shift.id)}
+                            className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
+                          >
+                            delete
+                          </button>
+                        </td>
+                      </AdminOnly>
                     </tr>
                   )
                 })}

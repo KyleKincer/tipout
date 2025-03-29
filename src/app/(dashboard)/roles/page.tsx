@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { PlusIcon, XCircleIcon } from '@heroicons/react/24/outline'
 import { format } from 'date-fns'
 import LoadingSpinner from '@/components/LoadingSpinner'
+import { AdminOnly } from '@/components/RoleBasedUI'
 
 type Role = {
   id: string
@@ -250,14 +251,16 @@ export default function RolesPage() {
           </p>
         </div>
         <div className="mt-4 sm:ml-16 sm:mt-0 sm:flex-none">
-          <button
-            type="button"
-            onClick={() => setIsAddingRole(true)}
-            className="block rounded-md bg-indigo-600 px-3 py-2 text-center text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
-          >
-            <PlusIcon className="h-5 w-5 inline-block mr-1" />
-            add role
-          </button>
+          <AdminOnly>
+            <button
+              type="button"
+              onClick={() => setIsAddingRole(true)}
+              className="block rounded-md bg-indigo-600 px-3 py-2 text-center text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+            >
+              <PlusIcon className="h-5 w-5 inline-block mr-1" />
+              add role
+            </button>
+          </AdminOnly>
         </div>
       </div>
 
@@ -397,15 +400,17 @@ export default function RolesPage() {
                       ) : (
                         <div className="flex items-center space-x-2">
                           <span>${role.basePayRate.toFixed(2)}/hr</span>
-                          <button
-                            onClick={() => setEditingRole({
-                              roleId: role.id,
-                              basePayRate: role.basePayRate.toString(),
-                            })}
-                            className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300 ml-2"
-                          >
-                            edit
-                          </button>
+                          <AdminOnly>
+                            <button
+                              onClick={() => setEditingRole({
+                                roleId: role.id,
+                                basePayRate: role.basePayRate.toString(),
+                              })}
+                              className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300 ml-2"
+                            >
+                              edit
+                            </button>
+                          </AdminOnly>
                         </div>
                       )}
                     </td>
@@ -443,37 +448,45 @@ export default function RolesPage() {
                             <div className="flex items-center space-x-2">
                               {config ? (
                                 <>
-                                  <span className="mr-2">{config.percentageRate}%</span>
+                                  {config.percentageRate > 0 ? (
+                                    <span className="mr-2">{config.percentageRate}%</span>
+                                  ) : (
+                                    <span className="mr-2 text-gray-400 dark:text-gray-500">receives tipout</span>
+                                  )}
                                   <div className="flex space-x-2">
-                                    <button
-                                      onClick={() => setEditingConfig({
-                                        roleId: role.id,
-                                        tipoutType: type.id,
-                                        percentageRate: config.percentageRate.toString(),
-                                      })}
-                                      className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300"
-                                    >
-                                      edit
-                                    </button>
-                                    <button
-                                      onClick={() => handleRemoveConfig(role.id, type.id)}
-                                      className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
-                                    >
-                                      remove
-                                    </button>
+                                    <AdminOnly>
+                                      <button
+                                        onClick={() => setEditingConfig({
+                                          roleId: role.id,
+                                          tipoutType: type.id,
+                                          percentageRate: config.percentageRate.toString(),
+                                        })}
+                                        className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300"
+                                      >
+                                        edit
+                                      </button>
+                                      <button
+                                        onClick={() => handleRemoveConfig(role.id, type.id)}
+                                        className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
+                                      >
+                                        remove
+                                      </button>
+                                    </AdminOnly>
                                   </div>
                                 </>
                               ) : (
-                                <button
-                                  onClick={() => setEditingConfig({
-                                    roleId: role.id,
-                                    tipoutType: type.id,
-                                    percentageRate: '',
-                                  })}
-                                  className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-                                >
-                                  add
-                                </button>
+                                <AdminOnly>
+                                  <button
+                                    onClick={() => setEditingConfig({
+                                      roleId: role.id,
+                                      tipoutType: type.id,
+                                      percentageRate: '',
+                                    })}
+                                    className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+                                  >
+                                    add
+                                  </button>
+                                </AdminOnly>
                               )}
                             </div>
                           )}
@@ -481,18 +494,20 @@ export default function RolesPage() {
                       )
                     })}
                     <td className="relative whitespace-nowrap py-3 pl-3 pr-6 text-right text-sm font-medium">
-                      <a
-                        href={`/roles/${role.id}/edit`}
-                        className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300 mr-4"
-                      >
-                        edit role
-                      </a>
-                      <button
-                        onClick={() => handleDeleteRole(role.id)}
-                        className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
-                      >
-                        delete
-                      </button>
+                      <AdminOnly>
+                        <a
+                          href={`/roles/${role.id}/edit`}
+                          className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300 mr-4"
+                        >
+                          edit role
+                        </a>
+                        <button
+                          onClick={() => handleDeleteRole(role.id)}
+                          className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
+                        >
+                          delete
+                        </button>
+                      </AdminOnly>
                     </td>
                   </tr>
                 ))}
@@ -513,18 +528,20 @@ export default function RolesPage() {
                       {role.name}
                     </h3>
                     <div className="flex space-x-2">
-                      <a
-                        href={`/roles/${role.id}/edit`}
-                        className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300 text-sm font-medium"
-                      >
-                        edit role
-                      </a>
-                      <button
-                        onClick={() => handleDeleteRole(role.id)}
-                        className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300 text-sm font-medium"
-                      >
-                        delete
-                      </button>
+                      <AdminOnly>
+                        <a
+                          href={`/roles/${role.id}/edit`}
+                          className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300 text-sm font-medium"
+                        >
+                          edit role
+                        </a>
+                        <button
+                          onClick={() => handleDeleteRole(role.id)}
+                          className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300 text-sm font-medium"
+                        >
+                          delete
+                        </button>
+                      </AdminOnly>
                     </div>
                   </div>
 
@@ -563,15 +580,17 @@ export default function RolesPage() {
                           ) : (
                             <div className="flex items-center justify-between w-full">
                               <span className="text-sm text-gray-900 dark:text-white">${role.basePayRate.toFixed(2)}/hr</span>
-                              <button
-                                onClick={() => setEditingRole({
-                                  roleId: role.id,
-                                  basePayRate: role.basePayRate.toString(),
-                                })}
-                                className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300 text-sm font-medium"
-                              >
-                                edit
-                              </button>
+                              <AdminOnly>
+                                <button
+                                  onClick={() => setEditingRole({
+                                    roleId: role.id,
+                                    basePayRate: role.basePayRate.toString(),
+                                  })}
+                                  className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300 text-sm font-medium"
+                                >
+                                  edit
+                                </button>
+                              </AdminOnly>
                             </div>
                           )}
                         </dd>
@@ -618,38 +637,46 @@ export default function RolesPage() {
                                 <div className="flex items-center justify-between">
                                   {config ? (
                                     <>
-                                      <span className="text-sm text-gray-900 dark:text-white">{config.percentageRate}%</span>
+                                      {config.percentageRate > 0 ? (
+                                        <span className="text-sm text-gray-900 dark:text-white">{config.percentageRate}%</span>
+                                      ) : (
+                                        <span className="text-sm text-gray-400 dark:text-gray-500">receives tipout</span>
+                                      )}
                                       <div className="flex space-x-2">
-                                        <button
-                                          onClick={() => setEditingConfig({
-                                            roleId: role.id,
-                                            tipoutType: type.id,
-                                            percentageRate: config.percentageRate.toString(),
-                                          })}
-                                          className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300 text-sm font-medium"
-                                        >
-                                          edit
-                                        </button>
-                                        <button
-                                          onClick={() => handleRemoveConfig(role.id, type.id)}
-                                          className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300 text-sm font-medium"
-                                        >
-                                          remove
-                                        </button>
+                                        <AdminOnly>
+                                          <button
+                                            onClick={() => setEditingConfig({
+                                              roleId: role.id,
+                                              tipoutType: type.id,
+                                              percentageRate: config.percentageRate.toString(),
+                                            })}
+                                            className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300 text-sm font-medium"
+                                          >
+                                            edit
+                                          </button>
+                                          <button
+                                            onClick={() => handleRemoveConfig(role.id, type.id)}
+                                            className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300 text-sm font-medium"
+                                          >
+                                            remove
+                                          </button>
+                                        </AdminOnly>
                                       </div>
                                     </>
                                   ) : (
                                     <div className="flex justify-end w-full">
-                                      <button
-                                        onClick={() => setEditingConfig({
-                                          roleId: role.id,
-                                          tipoutType: type.id,
-                                          percentageRate: '',
-                                        })}
-                                        className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300 text-sm font-medium"
-                                      >
-                                        add
-                                      </button>
+                                      <AdminOnly>
+                                        <button
+                                          onClick={() => setEditingConfig({
+                                            roleId: role.id,
+                                            tipoutType: type.id,
+                                            percentageRate: '',
+                                          })}
+                                          className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300 text-sm font-medium"
+                                        >
+                                          add
+                                        </button>
+                                      </AdminOnly>
                                     </div>
                                   )}
                                 </div>

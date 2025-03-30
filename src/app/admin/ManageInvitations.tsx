@@ -14,9 +14,9 @@ type SerializedInvitation = {
 // Loading component for invitation list
 function InvitationsListLoading() {
   return (
-    <div className="mt-6">
+    <div>
       <div className="h-5 w-40 bg-gray-200 dark:bg-gray-700 rounded mb-4"></div>
-      <div className="bg-white/50 dark:bg-gray-800/50 shadow overflow-hidden sm:rounded-md border border-gray-200 dark:border-gray-700 animate-pulse">
+      <div className="mt-4 bg-white/50 dark:bg-gray-800/50 shadow overflow-hidden sm:rounded-md border border-gray-200 dark:border-gray-700 animate-pulse">
         <ul className="divide-y divide-gray-200 dark:divide-gray-700">
           {[...Array(3)].map((_, i) => (
             <li key={i} className="px-6 py-4">
@@ -55,12 +55,12 @@ async function InvitationsList() {
   }));
   
   return (
-    <div className="mt-6">
-      <h3 className="text-base font-medium text-[var(--foreground)] mb-4">
+    <div>
+      <h3 className="text-base font-medium text-[var(--foreground)]">
         pending invitations ({totalCount})
       </h3>
       
-      <div className="bg-white/50 dark:bg-gray-800/50 shadow overflow-hidden sm:rounded-md border border-gray-200 dark:border-gray-700">
+      <div className="mt-4 bg-white/50 dark:bg-gray-800/50 shadow overflow-hidden sm:rounded-md border border-gray-200 dark:border-gray-700">
         <ul className="divide-y divide-gray-200 dark:divide-gray-700">
           {serializedInvitations.length === 0 ? (
             <li className="px-6 py-4 text-center text-sm text-gray-500 dark:text-gray-400">

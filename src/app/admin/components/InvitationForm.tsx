@@ -9,7 +9,7 @@ type InvitationFormProps = {
 
 export function InvitationForm({ action }: InvitationFormProps) {
   return (
-    <form action={action} className="mt-5 mb-6">
+    <form action={action} className="mt-4 mb-6">
       <div className="flex flex-col sm:flex-row gap-2 sm:items-end">
         <div className="flex-grow">
           <label htmlFor="emailAddress" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -19,7 +19,7 @@ export function InvitationForm({ action }: InvitationFormProps) {
             type="email"
             name="emailAddress"
             id="emailAddress"
-            className="shadow-sm focus:ring-blue-500 focus:border-blue-500 py-2 px-3 block w-full sm:text-sm border-gray-300 dark:border-gray-700 dark:bg-gray-800 rounded-md"
+            className="shadow-sm focus:ring-blue-500 focus:border-blue-500 px-3 py-2 block w-full sm:text-sm border-gray-300 dark:border-gray-700 dark:bg-gray-800 rounded-md"
             placeholder="email@example.com"
             required
           />

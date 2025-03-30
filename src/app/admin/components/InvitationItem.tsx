@@ -50,11 +50,11 @@ export function InvitationItem({ invitation, revokeInvitation }: InvitationItemP
             <div className="text-sm font-medium text-[var(--foreground)]">
               {invitation.emailAddress}
             </div>
-            <div className="flex items-center mt-1">
+            <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">
               <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 dark:bg-green-800 text-green-800 dark:text-green-100 mr-2">
                 {invitation.status}
               </span>
-              <span className="text-sm text-gray-500 dark:text-gray-400">
+              <span>
                 {invitation.createdAt 
                   ? formatDistanceToNow(new Date(invitation.createdAt), { addSuffix: true }) 
                   : 'unknown'}

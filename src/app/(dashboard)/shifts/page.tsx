@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import { AdminOnly } from '@/components/RoleBasedUI'
+import { calculateTipouts, roleReceivesTipoutType } from '@/utils/tipoutCalculations'
 
 type Employee = {
   id: string
@@ -34,34 +35,6 @@ type Shift = {
   cashTips: number
   creditTips: number
   liquorSales: number
-}
-
-// Helper function to calculate tipouts
-const calculateTipouts = (shift: Shift, hasHost: boolean, hasSA: boolean) => {
-  const totalTips = Number(shift.cashTips) + Number(shift.creditTips)
-  let barTipout = 0
-  let hostTipout = 0
-  let saTipout = 0
-
-  shift.role.configs.forEach(config => {
-    switch (config.tipoutType) {
-      case 'bar':
-        barTipout = Number(shift.liquorSales) * (config.percentageRate / 100)
-        break
-      case 'host':
-        if (hasHost) {
-          hostTipout = totalTips * (config.percentageRate / 100)
-        }
-        break
-      case 'sa':
-        if (hasSA) {
-          saTipout = totalTips * (config.percentageRate / 100)
-        }
-        break
-    }
-  })
-
-  return { barTipout, hostTipout, saTipout }
 }
 
 // Create a new client component for the shifts content
@@ -406,9 +379,13 @@ function ShiftsContent() {
                   date.setMinutes(date.getMinutes() + date.getTimezoneOffset())
                   const dateStr = format(date, 'yyyy-MM-dd')
                   const dayShifts = shiftsByDate[dateStr]
-                  const hasHost = dayShifts.some(s => s.role.name.toLowerCase().includes('host'))
-                  const hasSA = dayShifts.some(s => s.role.name.toLowerCase().includes('sa'))
-                  const { barTipout, hostTipout, saTipout } = calculateTipouts(shift, hasHost, hasSA)
+                  
+                  // Check for role types based on role configurations rather than name matching
+                  const hasHost = dayShifts.some(s => roleReceivesTipoutType(s, 'host'))
+                  const hasSA = dayShifts.some(s => roleReceivesTipoutType(s, 'sa'))
+                  const hasBar = dayShifts.some(s => roleReceivesTipoutType(s, 'bar'))
+                  
+                  const { barTipout, hostTipout, saTipout } = calculateTipouts(shift, hasHost, hasSA, hasBar)
 
                   return (
                     <tr key={shift.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">

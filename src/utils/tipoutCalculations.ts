@@ -37,9 +37,10 @@ type Shift = {
  * @param shift The shift to calculate tipouts for
  * @param hasHost Whether hosts worked that day (affects host tipouts)
  * @param hasSA Whether SAs worked that day (affects SA tipouts)
+ * @param hasBar Whether bartenders worked that day (affects bar tipouts)
  * @returns Object containing calculated tipout amounts
  */
-export const calculateTipouts = (shift: Shift, hasHost: boolean, hasSA: boolean) => {
+export const calculateTipouts = (shift: Shift, hasHost: boolean, hasSA: boolean, hasBar: boolean = false) => {
   if (!shift.role?.configs) return { barTipout: 0, hostTipout: 0, saTipout: 0 };
 
   console.log('calculateTipouts input:', { 
@@ -47,7 +48,8 @@ export const calculateTipouts = (shift: Shift, hasHost: boolean, hasSA: boolean)
     role: shift.role.name,
     configs: shift.role.configs.length,
     hasHost, 
-    hasSA
+    hasSA,
+    hasBar
   });
 
   const totalTips = Number(shift.cashTips) + Number(shift.creditTips);
@@ -67,7 +69,7 @@ export const calculateTipouts = (shift: Shift, hasHost: boolean, hasSA: boolean)
       liquorSales: shift.liquorSales,
       would_apply_host: hasHost && config.tipoutType === 'host',
       would_apply_sa: hasSA && config.tipoutType === 'sa',
-      would_apply_bar: config.tipoutType === 'bar'
+      would_apply_bar: hasBar && config.tipoutType === 'bar'
     });
 
     if (!paysTipout) return;
@@ -75,8 +77,11 @@ export const calculateTipouts = (shift: Shift, hasHost: boolean, hasSA: boolean)
     switch (config.tipoutType) {
       case 'bar':
         // Bar tipout is calculated based on liquor sales
-        barTipout = Number(shift.liquorSales) * (config.percentageRate / 100);
-        console.log('Calculated bar tipout:', barTipout);
+        // Only calculate if there are bartenders to receive the tipout
+        if (hasBar) {
+          barTipout = Number(shift.liquorSales) * (config.percentageRate / 100);
+          console.log('Calculated bar tipout:', barTipout);
+        }
         break;
       case 'host':
         // For debugging, temporarily ignore hasHost check

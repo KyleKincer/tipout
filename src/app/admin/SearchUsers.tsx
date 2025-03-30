@@ -38,7 +38,7 @@ export const SearchUsers = () => {
             id="search-loading" 
             type="text" 
             value={searchValue}
-            className="shadow-sm focus:ring-blue-500 focus:border-blue-500 px-2 py-1 block w-full sm:text-sm border-gray-300 dark:border-gray-700 dark:bg-gray-800 rounded-md cursor-not-allowed opacity-70"
+            className="shadow-sm focus:ring-blue-500 focus:border-blue-500 px-2 py-2 block w-full sm:text-sm border-gray-300 dark:border-gray-700 dark:bg-gray-800 rounded-md cursor-not-allowed opacity-70"
             disabled
           />
           <div className="absolute right-3 top-[60%] transform -translate-y-1/2">

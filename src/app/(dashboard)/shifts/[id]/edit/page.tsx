@@ -87,15 +87,11 @@ export default function EditShiftPage({ params }: { params: Promise<{ id: string
         }
         const shiftsData = await shiftsResponse.json()
 
-        // Check if hosts/SAs worked that day
-        const hasAnyHost = shiftsData.some((s: Shift) => 
-          s.role?.name?.toLowerCase().includes('host')
-        );
-        const hasAnySA = shiftsData.some((s: Shift) => 
-          s.role?.name?.toLowerCase().includes('sa')
-        );
+        // Check if hosts/SAs worked that day using role configurations
+        const hasAnyHost = shiftsData.some((s: Shift) => roleReceivesTipoutType(s, 'host'));
+        const hasAnySA = shiftsData.some((s: Shift) => roleReceivesTipoutType(s, 'sa'));
         
-        console.log('Found hosts/SAs by name?', { hasAnyHost, hasAnySA });
+        console.log('Found hosts/SAs by role configs?', { hasAnyHost, hasAnySA });
         
         setHasHost(hasAnyHost);
         setHasSA(hasAnySA);
@@ -145,12 +141,16 @@ export default function EditShiftPage({ params }: { params: Promise<{ id: string
     return <div>Shift not found</div>
   }
 
-  const { barTipout, hostTipout, saTipout } = calculateTipouts(shift, hasHost, hasSA)
+  // Check if this shift is a bartender using role configurations
+  const hasBar = roleReceivesTipoutType(shift, 'bar');
+
+  const { barTipout, hostTipout, saTipout } = calculateTipouts(shift, hasHost, hasSA, hasBar)
   
   // Debug logging
   console.log('Final values used for calculation:', { 
     hasHost, 
     hasSA,
+    hasBar,
     role: shift.role?.name,
     configCount: shift.role?.configs?.length,
     cashTips: shift.cashTips,

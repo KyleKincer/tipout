@@ -111,6 +111,7 @@ function ReportsContent() {
   const [isFilterLoading, setIsFilterLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isDateRange, setIsDateRange] = useState(false)
+  const [fullscreenChart, setFullscreenChart] = useState<string | null>(null)
   const [filters, setFilters] = useState(() => {
     return {
       startDate: searchParams.get('startDate') || format(new Date(), 'yyyy-MM-dd'),
@@ -213,21 +214,19 @@ function ReportsContent() {
       summary.totalLiquorSales += Number(shift.liquorSales)
     })
 
+    // Check if there's at least one of each role type
+    const hasBar = shifts.some(shift => roleReceivesTipoutType(shift, 'bar'))
+    const hasHost = shifts.some(shift => roleReceivesTipoutType(shift, 'host'))
+    const hasSA = shifts.some(shift => roleReceivesTipoutType(shift, 'sa'))
+
     // Calculate total tipouts
     const allTipouts = shifts.map(shift => {
-      return calculateTipouts(shift, true, true)
+      return calculateTipouts(shift, hasHost, hasSA, hasBar)
     })
 
     summary.totalBarTipout = allTipouts.reduce((sum, { barTipout }) => sum + barTipout, 0)
     summary.totalHostTipout = allTipouts.reduce((sum, { hostTipout }) => sum + hostTipout, 0)
     summary.totalSaTipout = allTipouts.reduce((sum, { saTipout }) => sum + saTipout, 0)
-
-    // Helper function to check if a role receives a specific tipout type
-    const roleReceivesTipoutType = (shift: Shift, tipoutType: string): boolean => {
-      return shift.role.configs.some(config => 
-        config.tipoutType === tipoutType && config.receivesTipout
-      )
-    }
     
     // Get shifts by role category using configurations
     const barShifts = shifts.filter(shift => roleReceivesTipoutType(shift, 'bar'))
@@ -252,7 +251,7 @@ function ReportsContent() {
     // Server tipouts breakdown
     
     const serverHostAndSATipouts = serverShifts.reduce((sum, shift) => {
-      const { hostTipout, saTipout } = calculateTipouts(shift, true, true)
+      const { hostTipout, saTipout } = calculateTipouts(shift, hasHost, hasSA, hasBar)
       return sum + hostTipout + saTipout
     }, 0)
     
@@ -267,7 +266,7 @@ function ReportsContent() {
     // Total bartender payroll tips = credit tips - tipout to hosts/SA + bar tipout received
     const barPayrollTips = barCreditTips - 
       barShifts.reduce((acc, shift) => {
-        const { hostTipout, saTipout } = calculateTipouts(shift, true, true)
+        const { hostTipout, saTipout } = calculateTipouts(shift, hasHost, hasSA, hasBar)
         return acc + hostTipout + saTipout
       }, 0) + 
       summary.totalBarTipout
@@ -293,11 +292,12 @@ function ReportsContent() {
     // Check if there's at least one host and SA
     const hasHost = shifts.some(shift => roleReceivesTipoutType(shift, 'host'))
     const hasSA = shifts.some(shift => roleReceivesTipoutType(shift, 'sa'))
+    const hasBar = shifts.some(shift => roleReceivesTipoutType(shift, 'bar'))
 
     // Calculate total tipouts across all dates
     const totalBarTipout = shifts.reduce((sum, shift) => {
       if (rolePaysTipoutType(shift, 'bar')) {
-        const { barTipout } = calculateTipouts(shift, hasHost, hasSA)
+        const { barTipout } = calculateTipouts(shift, hasHost, hasSA, hasBar)
         return sum + barTipout
       }
       return sum
@@ -305,7 +305,7 @@ function ReportsContent() {
 
     const totalHostTipout = shifts.reduce((sum, shift) => {
       if (rolePaysTipoutType(shift, 'host')) {
-        const { hostTipout } = calculateTipouts(shift, hasHost, hasSA)
+        const { hostTipout } = calculateTipouts(shift, hasHost, hasSA, hasBar)
         return sum + hostTipout
       }
       return sum
@@ -313,7 +313,7 @@ function ReportsContent() {
 
     const totalSATipout = shifts.reduce((sum, shift) => {
       if (rolePaysTipoutType(shift, 'sa')) {
-        const { saTipout } = calculateTipouts(shift, hasHost, hasSA)
+        const { saTipout } = calculateTipouts(shift, hasHost, hasSA, hasBar)
         return sum + saTipout
       }
       return sum
@@ -363,7 +363,7 @@ function ReportsContent() {
     // Calculate server credit tips per hour rate - following spreadsheet formula
     const serverCreditTipsTotal = serverShifts.reduce((sum, shift) => sum + Number(shift.creditTips), 0)
     const serverHostSATipoutsTotal = serverShifts.reduce((sum, shift) => {
-      const { hostTipout, saTipout } = calculateTipouts(shift, hasHost, hasSA)
+      const { hostTipout, saTipout } = calculateTipouts(shift, hasHost, hasSA, hasBar)
       return sum + hostTipout + saTipout
     }, 0)
     const serverCreditTipsPerHour = serverHours > 0 ? 
@@ -376,7 +376,7 @@ function ReportsContent() {
     // Calculate bartender credit tips per hour rate
     const bartenderCreditTipsTotal = bartenderShifts.reduce((sum, shift) => sum + Number(shift.creditTips), 0)
     const bartenderTipoutsTotal = bartenderShifts.reduce((sum, shift) => {
-      const { hostTipout, saTipout } = calculateTipouts(shift, hasHost, hasSA)
+      const { hostTipout, saTipout } = calculateTipouts(shift, hasHost, hasSA, hasBar)
       return sum + hostTipout + saTipout
     }, 0)
     const bartenderCreditTipsPerHour = bartenderHours > 0 ? 
@@ -407,17 +407,17 @@ function ReportsContent() {
       
       // Calculate tipouts this role pays
       if (rolePaysTipoutType(shift, 'bar') && !roleReceivesTipoutType(shift, 'bar')) {
-        const { barTipout } = calculateTipouts(shift, hasHost, hasSA)
+        const { barTipout } = calculateTipouts(shift, hasHost, hasSA, hasBar)
         existing.totalBarTipout -= barTipout
       }
       
       if (rolePaysTipoutType(shift, 'host') && !roleReceivesTipoutType(shift, 'host')) {
-        const { hostTipout } = calculateTipouts(shift, hasHost, hasSA)
+        const { hostTipout } = calculateTipouts(shift, hasHost, hasSA, hasBar)
         existing.totalHostTipout -= hostTipout
       }
       
       if (rolePaysTipoutType(shift, 'sa') && !roleReceivesTipoutType(shift, 'sa')) {
-        const { saTipout } = calculateTipouts(shift, hasHost, hasSA)
+        const { saTipout } = calculateTipouts(shift, hasHost, hasSA, hasBar)
         existing.totalSaTipout -= saTipout
       }
       
@@ -442,6 +442,8 @@ function ReportsContent() {
       }
       
       if (roleReceivesTipoutType(shift, 'host')) {
+        console.log(`Host role detected for ${shift.employee.name}: role=${shift.role.name}, totalHostTipout=${existing.totalHostTipout}, hostTipoutPool=${totalHostTipout}`);
+        
         const distributionGroup = getRoleDistributionGroup(shift, 'host')
         
         if (distributionGroup) {
@@ -450,15 +452,22 @@ function ReportsContent() {
           if (groupHours > 0) {
             const share = Number(shift.hours) / groupHours
             existing.totalHostTipout += share * totalHostTipout
+            console.log(`  After distribution: totalHostTipout=${existing.totalHostTipout}, share=${share}, hours=${shift.hours}, groupHours=${groupHours}`);
           }
         }
         
         // Hosts don't generally have cash or credit tips directly
         existing.totalCashTips = 0
         existing.totalCreditTips = 0
+        
+        // Set payroll tips for hosts to be their host tipout
+        existing.totalPayrollTips = existing.totalHostTipout
+        console.log(`  Final host payroll tips=${existing.totalPayrollTips}`);
       }
       
       if (roleReceivesTipoutType(shift, 'sa')) {
+        console.log(`SA role detected for ${shift.employee.name}: role=${shift.role.name}, totalSATipout=${existing.totalSaTipout}, saTipoutPool=${totalSATipout}`);
+        
         const distributionGroup = getRoleDistributionGroup(shift, 'sa')
         
         if (distributionGroup) {
@@ -467,12 +476,17 @@ function ReportsContent() {
           if (groupHours > 0) {
             const share = Number(shift.hours) / groupHours
             existing.totalSaTipout += share * totalSATipout
+            console.log(`  After distribution: totalSATipout=${existing.totalSaTipout}, share=${share}, hours=${shift.hours}, groupHours=${groupHours}`);
           }
         }
         
         // SAs don't generally have cash or credit tips directly
         existing.totalCashTips = 0
         existing.totalCreditTips = 0
+        
+        // Set payroll tips for SAs to be their SA tipout
+        existing.totalPayrollTips = existing.totalSaTipout
+        console.log(`  Final SA payroll tips=${existing.totalPayrollTips}`);
       }
       
       // For servers, calculate their cash and credit tips per hour
@@ -481,7 +495,7 @@ function ReportsContent() {
         
         // Calculate credit/payroll tips based on hours worked minus individual bar tipout
         // This matches the spreadsheet formula: (server credit/HR * hours) - bar tipout
-        const { barTipout } = calculateTipouts(shift, hasHost, hasSA)
+        const { barTipout } = calculateTipouts(shift, hasHost, hasSA, hasBar)
         const payrollTips = (serverCreditTipsPerHour * existing.totalHours) - barTipout
         existing.totalPayrollTips = payrollTips  // Store for debugging
         existing.creditTipsPerHour = existing.totalHours > 0 ? payrollTips / existing.totalHours : 0
@@ -568,14 +582,7 @@ function ReportsContent() {
     return Array.from(summaries.values())
   }
 
-  if (isLoading) {
-    return <LoadingSpinner />
-  }
-
-  const summary = calculateSummary()
-  const employeeRoleSummaries = calculateEmployeeRoleSummaries()
-
-  // Chart components
+  // TipoutBreakdownChart
   const TipoutBreakdownChart = () => {
     const data = {
       labels: ['Server Tips', 'Bar Tipout', 'Host Tipout'],
@@ -605,8 +612,7 @@ function ReportsContent() {
 
     return (
       <div className="h-full">
-        <h3 className="text-lg font-medium leading-6 text-[var(--foreground)] mb-4">where tips go</h3>
-        <div className="h-[calc(100%-2rem)] flex justify-center">
+        <div className="h-full flex justify-center">
           <div className="w-full max-w-lg">
           <Doughnut
             data={data}
@@ -648,6 +654,7 @@ function ReportsContent() {
     )
   }
 
+  // TipoutPerHourChart
   const TipoutPerHourChart = () => {
     // Filter by roles that actually have data
     const roleData = employeeRoleSummaries.reduce((acc, summary) => {
@@ -657,14 +664,16 @@ function ReportsContent() {
           totalTipsPerHour: 0,
           cashTipsPerHour: 0,
           creditTipsPerHour: 0,
+          basePayRate: 0,
         }
       }
       acc[summary.roleName].count += 1
       acc[summary.roleName].totalTipsPerHour += summary.totalTipsPerHour
       acc[summary.roleName].cashTipsPerHour += summary.cashTipsPerHour
       acc[summary.roleName].creditTipsPerHour += summary.creditTipsPerHour
+      acc[summary.roleName].basePayRate += summary.basePayRate
       return acc
-    }, {} as Record<string, { count: number, totalTipsPerHour: number, cashTipsPerHour: number, creditTipsPerHour: number }>)
+    }, {} as Record<string, { count: number, totalTipsPerHour: number, cashTipsPerHour: number, creditTipsPerHour: number, basePayRate: number }>)
 
     const roles = Object.keys(roleData)
     const averages = roles.map(role => ({
@@ -672,14 +681,30 @@ function ReportsContent() {
       totalTipsPerHour: roleData[role].totalTipsPerHour / roleData[role].count,
       cashTipsPerHour: roleData[role].cashTipsPerHour / roleData[role].count,
       creditTipsPerHour: roleData[role].creditTipsPerHour / roleData[role].count,
+      basePayRate: roleData[role].basePayRate / roleData[role].count,
+      totalEarningsPerHour: (roleData[role].totalTipsPerHour / roleData[role].count) + (roleData[role].basePayRate / roleData[role].count)
     }))
 
-    // Sort roles by total tips per hour (descending)
-    averages.sort((a, b) => b.totalTipsPerHour - a.totalTipsPerHour);
+    // Sort roles by total earnings per hour (descending)
+    averages.sort((a, b) => b.totalEarningsPerHour - a.totalEarningsPerHour);
 
     const data = {
       labels: averages.map(a => a.role),
       datasets: [
+        {
+          label: 'Total Earnings/Hour',
+          data: averages.map(a => a.totalEarningsPerHour),
+          backgroundColor: 'rgba(255, 159, 64, 0.7)',  // Orange for total earnings
+          borderColor: 'rgba(255, 159, 64, 1)',
+          borderWidth: 1,
+        },
+        {
+          label: 'Base Pay/Hour',
+          data: averages.map(a => a.basePayRate),
+          backgroundColor: 'rgba(255, 206, 86, 0.7)',  // Yellow for base pay
+          borderColor: 'rgba(255, 206, 86, 1)',
+          borderWidth: 1,
+        },
         {
           label: 'Total Tips/Hour',
           data: averages.map(a => a.totalTipsPerHour),
@@ -706,8 +731,7 @@ function ReportsContent() {
 
     return (
       <div className="h-full">
-        <h3 className="text-lg font-medium leading-6 text-[var(--foreground)] mb-4">earnings per hour by role</h3>
-        <div className="h-[calc(100%-2rem)]">
+        <div className="h-full">
           <Bar
             data={data}
             options={{
@@ -763,6 +787,7 @@ function ReportsContent() {
     )
   }
 
+  // TipoutContributionChart
   const TipoutContributionChart = () => {
     // Group tipout data by employee
     const employeeTipouts = employeeRoleSummaries.reduce((acc, summary) => {
@@ -773,22 +798,51 @@ function ReportsContent() {
         };
       }
       
-      // Calculate total tipout paid (negative values mean paying out)
-      const tipoutPaid = Math.min(0, summary.totalBarTipout + summary.totalHostTipout + summary.totalSaTipout);
+      console.log(`Tipout calculation for ${summary.employeeName} (${summary.roleName}):`);
+      console.log(`  Bar tipout: ${summary.totalBarTipout}`);
+      console.log(`  Host tipout: ${summary.totalHostTipout}`);
+      console.log(`  SA tipout: ${summary.totalSaTipout}`);
       
-      // Calculate total tipout received (positive values mean receiving)
-      const tipoutReceived = Math.max(0, summary.totalBarTipout + summary.totalHostTipout + summary.totalSaTipout);
+      // Calculate tipouts paid vs. received for each tipout type
+      // Negative tipout values mean paying into pool
+      if (summary.totalBarTipout < 0) {
+        acc[summary.employeeName].paid += Math.abs(summary.totalBarTipout);
+        console.log(`  Paid bar tipout: ${Math.abs(summary.totalBarTipout)}`);
+      } else if (summary.totalBarTipout > 0) {
+        acc[summary.employeeName].received += summary.totalBarTipout;
+        console.log(`  Received bar tipout: ${summary.totalBarTipout}`);
+      }
       
-      acc[summary.employeeName].paid += Math.abs(tipoutPaid);
-      acc[summary.employeeName].received += tipoutReceived;
+      if (summary.totalHostTipout < 0) {
+        acc[summary.employeeName].paid += Math.abs(summary.totalHostTipout);
+        console.log(`  Paid host tipout: ${Math.abs(summary.totalHostTipout)}`);
+      } else if (summary.totalHostTipout > 0) {
+        acc[summary.employeeName].received += summary.totalHostTipout;
+        console.log(`  Received host tipout: ${summary.totalHostTipout}`);
+      }
+      
+      if (summary.totalSaTipout < 0) {
+        acc[summary.employeeName].paid += Math.abs(summary.totalSaTipout);
+        console.log(`  Paid SA tipout: ${Math.abs(summary.totalSaTipout)}`);
+      } else if (summary.totalSaTipout > 0) {
+        acc[summary.employeeName].received += summary.totalSaTipout;
+        console.log(`  Received SA tipout: ${summary.totalSaTipout}`);
+      }
+      
+      console.log(`  Total paid: ${acc[summary.employeeName].paid}`);
+      console.log(`  Total received: ${acc[summary.employeeName].received}`);
       
       return acc;
     }, {} as Record<string, { paid: number, received: number }>);
     
     const employees = Object.keys(employeeTipouts);
     
-    // Sort employees by the amount they pay into the pool (descending)
-    employees.sort((a, b) => employeeTipouts[b].paid - employeeTipouts[a].paid);
+    // Sort employees by combined tipout activity (paid + received, descending)
+    employees.sort((a, b) => {
+      const totalA = employeeTipouts[a].paid + employeeTipouts[a].received;
+      const totalB = employeeTipouts[b].paid + employeeTipouts[b].received;
+      return totalB - totalA;
+    });
     
     // Only include employees with significant tipout activity
     const significantEmployees = employees.filter(emp => 
@@ -817,8 +871,7 @@ function ReportsContent() {
 
     return (
       <div className="h-full">
-        <h3 className="text-lg font-medium leading-6 text-[var(--foreground)] mb-4">tipout flow by employee</h3>
-        <div className="h-[calc(100%-2rem)]">
+        <div className="h-full">
           <Bar
             data={data}
             options={{
@@ -875,6 +928,7 @@ function ReportsContent() {
     )
   }
 
+  // TipoutRatesChart
   const TipoutRatesChart = () => {
     // Find unique roles with tipout configurations
     const uniqueRoles = new Set<string>();
@@ -935,8 +989,7 @@ function ReportsContent() {
 
     return (
       <div className="h-full">
-        <h3 className="text-lg font-medium leading-6 text-[var(--foreground)] mb-4">tipout rates by role</h3>
-        <div className="h-[calc(100%-2rem)]">
+        <div className="h-full">
           <Bar
             data={data}
             options={{
@@ -992,6 +1045,368 @@ function ReportsContent() {
     )
   }
 
+  // Add a function to get enhanced chart options for fullscreen mode
+  const getFullscreenChartOptions = (chartId: string) => {
+    // Common fullscreen enhancements
+    const common = {
+      responsive: true,
+      maintainAspectRatio: true,
+      animation: {
+        duration: 500
+      },
+      plugins: {
+        legend: {
+          labels: {
+            font: {
+              size: 14
+            },
+            padding: 20,
+            color: '#ffffff',
+          }
+        },
+        tooltip: {
+          bodyFont: {
+            size: 14
+          },
+          titleFont: {
+            size: 16
+          },
+          padding: 15,
+          titleColor: '#ffffff',
+          bodyColor: '#ffffff',
+          backgroundColor: 'rgba(0, 0, 0, 0.8)',
+        }
+      }
+    };
+
+    // Chart-specific enhancements
+    switch (chartId) {
+      case 'tipout-breakdown':
+        return {
+          ...common,
+          responsive: true,
+          maintainAspectRatio: true,
+          aspectRatio: 1, // Use a square aspect ratio in fullscreen
+          plugins: {
+            ...common.plugins,
+            legend: {
+              ...common.plugins.legend,
+              position: 'right' as const,
+              labels: {
+                ...common.plugins.legend.labels,
+                font: {
+                  size: 16
+                },
+                boxWidth: 20,
+                padding: 25,
+              }
+            }
+          }
+        };
+      case 'tipout-per-hour':
+      case 'tipout-rates':
+        return {
+          ...common,
+          responsive: true,
+          maintainAspectRatio: true,
+          scales: {
+            y: {
+              grid: {
+                color: 'rgba(255, 255, 255, 0.1)',
+              },
+              ticks: {
+                color: '#ffffff',
+                font: {
+                  size: 14
+                }
+              },
+              title: {
+                display: true,
+                font: {
+                  size: 16
+                },
+                color: '#ffffff',
+              }
+            },
+            x: {
+              grid: {
+                color: 'rgba(255, 255, 255, 0.1)',
+              },
+              ticks: {
+                color: '#ffffff',
+                font: {
+                  size: 14
+                }
+              }
+            }
+          }
+        };
+      case 'tipout-contribution':
+        return {
+          ...common,
+          responsive: true,
+          maintainAspectRatio: true,
+          indexAxis: 'y' as const,
+          scales: {
+            x: {
+              grid: {
+                color: 'rgba(255, 255, 255, 0.1)',
+              },
+              ticks: {
+                color: '#ffffff',
+                font: {
+                  size: 14
+                }
+              },
+              title: {
+                display: true,
+                font: {
+                  size: 16
+                },
+                color: '#ffffff',
+              }
+            },
+            y: {
+              grid: {
+                color: 'rgba(255, 255, 255, 0.1)',
+              },
+              ticks: {
+                color: '#ffffff',
+                font: {
+                  size: 14
+                }
+              }
+            }
+          }
+        };
+      default:
+        return common;
+    }
+  };
+
+  // Fullscreen chart component wrapper
+  const FullscreenChart = ({ 
+    id, 
+    title, 
+    children 
+  }: { 
+    id: string, 
+    title: string, 
+    children: React.ReactNode 
+  }) => {
+    return (
+      <div className="h-full relative">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-medium leading-6 text-[var(--foreground)]">{title}</h3>
+          <button
+            className="p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors rounded-md hover:bg-gray-100 dark:hover:bg-gray-700"
+            onClick={() => setFullscreenChart(id)}
+            aria-label={`View ${title} in fullscreen mode`}
+            title={`View ${title} in fullscreen mode`}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
+            </svg>
+          </button>
+        </div>
+        <div className="h-[calc(100%-2rem)]">
+          {children}
+        </div>
+      </div>
+    );
+  };
+
+  // Fullscreen modal component
+  const FullscreenModal = () => {
+    if (!fullscreenChart) return null;
+
+    // Add effect to handle keyboard events and focus management
+    useEffect(() => {
+      const handleKeyDown = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') {
+          setFullscreenChart(null);
+        }
+      };
+
+      // Add event listener
+      document.addEventListener('keydown', handleKeyDown);
+      
+      // Focus management - store the active element and focus the modal
+      const previousActiveElement = document.activeElement as HTMLElement;
+      const modalContainer = document.getElementById('fullscreen-modal-container');
+      if (modalContainer) modalContainer.focus();
+      
+      // Prevent scrolling on the body
+      document.body.style.overflow = 'hidden';
+
+      // Cleanup
+      return () => {
+        document.removeEventListener('keydown', handleKeyDown);
+        // Restore focus to the previous element
+        if (previousActiveElement) previousActiveElement.focus();
+        // Restore scrolling
+        document.body.style.overflow = '';
+      };
+    }, []);
+
+    // Get the fullscreen chart options
+    const fullscreenOptions = getFullscreenChartOptions(fullscreenChart);
+
+    const renderChartContent = () => {
+      // Custom chart rendering for fullscreen view
+      switch (fullscreenChart) {
+        case 'tipout-breakdown': {
+          const data = {
+            labels: ['Server Tips', 'Bar Tipout', 'Host Tipout'],
+            datasets: [
+              {
+                label: 'Tip Distribution',
+                data: [
+                  summary.totalCashTips + summary.totalCreditTips - 
+                  (summary.totalBarTipout + summary.totalHostTipout),
+                  summary.totalBarTipout,
+                  summary.totalHostTipout,
+                ],
+                backgroundColor: [
+                  'rgba(54, 162, 235, 0.7)',  // Blue for server tips
+                  'rgba(255, 99, 132, 0.7)',  // Red for bar tipout
+                  'rgba(255, 206, 86, 0.7)',  // Yellow for host tipout
+                ],
+                borderColor: [
+                  'rgba(54, 162, 235, 1)',
+                  'rgba(255, 99, 132, 1)',
+                  'rgba(255, 206, 86, 1)',
+                ],
+                borderWidth: 1,
+              }
+            ]
+          };
+          
+          return (
+            <Doughnut 
+              data={data} 
+              options={{
+                responsive: true,
+                maintainAspectRatio: true,
+                aspectRatio: 1.2,
+                plugins: {
+                  legend: {
+                    position: 'right',
+                    labels: {
+                      boxWidth: 20,
+                      padding: 20,
+                      color: '#ffffff',
+                      font: {
+                        size: 16
+                      }
+                    }
+                  },
+                  tooltip: {
+                    titleColor: '#ffffff',
+                    bodyColor: '#ffffff',
+                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                    callbacks: {
+                      label: function(context) {
+                        const value = context.raw as number;
+                        const total = context.dataset.data.reduce((a, b) => (a as number) + (b as number), 0) as number;
+                        const percentage = Math.round((value / total) * 100);
+                        return `${context.label}: $${value.toFixed(2)} (${percentage}%)`;
+                      }
+                    }
+                  }
+                }
+              }}
+            />
+          );
+        }
+        case 'tipout-per-hour':
+        case 'tipout-rates':
+        case 'tipout-contribution': {
+          // For other charts, use the original components
+          // They will receive the full size from the container
+          const Component = {
+            'tipout-per-hour': TipoutPerHourChart,
+            'tipout-rates': TipoutRatesChart,
+            'tipout-contribution': TipoutContributionChart
+          }[fullscreenChart];
+          
+          return <Component />;
+        }
+        default:
+          return null;
+      }
+    };
+
+    const getChartTitle = () => {
+      switch (fullscreenChart) {
+        case 'tipout-breakdown':
+          return 'Where Tips Go';
+        case 'tipout-per-hour':
+          return 'Earnings Per Hour By Role';
+        case 'tipout-rates':
+          return 'Tipout Rates By Role';
+        case 'tipout-contribution':
+          return 'Tipout Flow By Employee';
+        default:
+          return '';
+      }
+    };
+
+    return (
+      <div 
+        className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+        onClick={() => setFullscreenChart(null)}
+      >
+        <div 
+          id="fullscreen-modal-container"
+          className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-6xl h-[85vh] overflow-hidden"
+          onClick={(e) => e.stopPropagation()} // Prevent clicks on the modal from closing it
+          tabIndex={-1} // For focus management
+        >
+          <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+            <h3 className="text-xl font-semibold text-[var(--foreground)]">{getChartTitle()}</h3>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-500 dark:text-gray-400">Press ESC to close</span>
+              <button
+                className="p-1.5 rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700 transition-colors"
+                onClick={() => setFullscreenChart(null)}
+                aria-label="Minimize chart"
+                title="Exit fullscreen mode"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3" />
+                </svg>
+              </button>
+              <button
+                className="p-1.5 rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700 transition-colors"
+                onClick={() => setFullscreenChart(null)}
+                aria-label="Close"
+                title="Close"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          </div>
+          <div className="p-4 h-[calc(100%-4.5rem)] flex items-center justify-center">
+            <div className="w-[90%] h-[90%] flex items-center justify-center">
+              <div className="w-full h-full">
+                {renderChartContent()}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  if (isLoading) {
+    return <LoadingSpinner />
+  }
+
+  const summary = calculateSummary()
+  const employeeRoleSummaries = calculateEmployeeRoleSummaries()
 
   return (
     <div className="px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
@@ -1522,27 +1937,38 @@ function ReportsContent() {
             <h2 className="text-xl font-semibold text-[var(--foreground)] mb-6">visualization & analytics</h2>
             <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
               <div className="bg-white/50 dark:bg-gray-800/50 p-4 sm:p-6 rounded-lg shadow border border-gray-200 dark:border-gray-700 transition-all hover:shadow-md h-[300px] sm:h-[400px]">
-                <TipoutBreakdownChart />
-          </div>
+                <FullscreenChart id="tipout-breakdown" title="where tips go">
+                  <TipoutBreakdownChart />
+                </FullscreenChart>
+              </div>
 
               <div className="bg-white/50 dark:bg-gray-800/50 p-4 sm:p-6 rounded-lg shadow border border-gray-200 dark:border-gray-700 transition-all hover:shadow-md h-[300px] sm:h-[400px]">
-              <TipoutPerHourChart />
+                <FullscreenChart id="tipout-per-hour" title="earnings per hour by role">
+                  <TipoutPerHourChart />
+                </FullscreenChart>
+              </div>
             </div>
-          </div>
 
             <div className="mt-8 grid grid-cols-1 gap-8 md:grid-cols-2">
               <div className="bg-white/50 dark:bg-gray-800/50 p-4 sm:p-6 rounded-lg shadow border border-gray-200 dark:border-gray-700 transition-all hover:shadow-md h-[300px] sm:h-[400px]">
-              <TipoutRatesChart />
-          </div>
+                <FullscreenChart id="tipout-rates" title="tipout rates by role">
+                  <TipoutRatesChart />
+                </FullscreenChart>
+              </div>
 
               <div className="bg-white/50 dark:bg-gray-800/50 p-4 sm:p-6 rounded-lg shadow border border-gray-200 dark:border-gray-700 transition-all hover:shadow-md h-[300px] sm:h-[400px]">
-              <TipoutContributionChart />
-            </div>
+                <FullscreenChart id="tipout-contribution" title="tipout flow by employee">
+                  <TipoutContributionChart />
+                </FullscreenChart>
+              </div>
             </div>
           </div>
+
+          {/* Render the fullscreen modal */}
+          <FullscreenModal />
         </>
       )}
-            </div>
+    </div>
   )
 }
 

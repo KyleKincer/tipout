@@ -98,6 +98,7 @@ type EmployeeRoleSummary = {
   totalTipsPerHour: number
   basePayRate: number
   totalPayrollTips?: number  // For debugging
+  totalLiquorSales: number   // Added liquor sales
 }
 
 // Create a new client component for the reports content
@@ -399,11 +400,13 @@ function ReportsContent() {
         creditTipsPerHour: 0,
         totalTipsPerHour: 0,
         basePayRate: Number(shift.role.basePayRate),
+        totalLiquorSales: 0,
       }
 
       existing.totalHours += Number(shift.hours)
       existing.totalCashTips += Number(shift.cashTips)
       existing.totalCreditTips += Number(shift.creditTips)
+      existing.totalLiquorSales = (existing.totalLiquorSales || 0) + Number(shift.liquorSales) // Accumulate liquor sales
       
       // Calculate tipouts this role pays
       if (rolePaysTipoutType(shift, 'bar') && !roleReceivesTipoutType(shift, 'bar')) {
@@ -1728,9 +1731,9 @@ function ReportsContent() {
                       </p>
                     </div>
                     <div>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">total tips</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">liquor sales</p>
                       <p className="text-sm font-medium text-[var(--foreground)]">
-                        ${(summary.totalCashTips + summary.totalCreditTips).toFixed(2)}
+                        ${summary.totalLiquorSales.toFixed(2)}
                       </p>
                     </div>
                   </div>
@@ -1828,6 +1831,9 @@ function ReportsContent() {
                           credit tips
                         </th>
                         <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
+                          liquor sales
+                        </th>
+                        <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
                           bar tipout
                         </th>
                         <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
@@ -1879,6 +1885,9 @@ function ReportsContent() {
                           </td>
                           <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
                             ${summary.totalCreditTips.toFixed(2)}
+                          </td>
+                          <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
+                            ${summary.totalLiquorSales.toFixed(2)}
                           </td>
                           <td className={`whitespace-nowrap px-3 py-4 text-sm ${
                             summary.totalBarTipout !== 0 

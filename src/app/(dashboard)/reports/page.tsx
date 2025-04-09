@@ -1705,7 +1705,7 @@ function ReportsContent() {
                         ${(summary.totalTipsPerHour + summary.basePayRate).toFixed(2)}/hr
                       </p>
                       <p className="text-xs text-gray-500 dark:text-gray-400">
-                        {summary.totalHours.toFixed(1)} hours
+                        {summary.totalHours} hours
                       </p>
                     </div>
                   </div>
@@ -1869,7 +1869,7 @@ function ReportsContent() {
                             {summary.roleName}
                           </td>
                           <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
-                            {summary.totalHours.toFixed(1)}
+                            {summary.totalHours}
                           </td>
                           <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
                             ${summary.totalCashTips.toFixed(2)}

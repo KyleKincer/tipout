@@ -99,6 +99,7 @@ type EmployeeRoleSummary = {
   basePayRate: number
   totalPayrollTips?: number  // For debugging
   totalLiquorSales: number   // Added liquor sales
+  payrollTotal?: number      // Calculated total payroll amount
 }
 
 // Create a new client component for the reports content
@@ -524,6 +525,9 @@ function ReportsContent() {
         existing.totalTipsPerHour = existing.totalHours > 0 ? 
           totalTips / existing.totalHours : 0
       }
+      
+      // Calculate payroll total
+      existing.payrollTotal = (existing.basePayRate * existing.totalHours) + (existing.totalPayrollTips ?? 0)
       
       summaries.set(key, existing)
     })
@@ -1802,6 +1806,12 @@ function ReportsContent() {
                           ${(summary.totalTipsPerHour + summary.basePayRate).toFixed(2)}
                         </p>
                       </div>
+                      <div>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">payroll total</p>
+                        <p className="text-sm font-medium text-blue-600 dark:text-blue-400">
+                          ${summary.payrollTotal?.toFixed(2) ?? 'n/a'}
+                        </p>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1853,6 +1863,9 @@ function ReportsContent() {
                         </th>
                         <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
                           total $/hour
+                        </th>
+                        <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
+                          payroll total
                         </th>
                       </tr>
                     </thead>
@@ -1935,6 +1948,9 @@ function ReportsContent() {
                           </td>
                           <td className="whitespace-nowrap px-3 py-4 text-sm font-medium text-green-600 dark:text-green-400">
                             ${(summary.totalTipsPerHour + summary.basePayRate).toFixed(2)}
+                          </td>
+                          <td className="whitespace-nowrap px-3 py-4 text-sm font-medium text-blue-600 dark:text-blue-400">
+                            ${summary.payrollTotal?.toFixed(2) ?? 'n/a'}
                           </td>
                         </tr>
                       ))}

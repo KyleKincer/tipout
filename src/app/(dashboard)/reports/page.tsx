@@ -1641,51 +1641,6 @@ function ReportsContent() {
           </div>
 
           <div className="mt-12">
-            <h2 className="text-xl font-semibold text-[var(--foreground)] mb-6">detailed analysis</h2>
-            <div className="bg-white/50 dark:bg-gray-800/50 shadow sm:rounded-lg border border-gray-200 dark:border-gray-700">
-            <div className="px-4 py-5 sm:p-6">
-                <h3 className="text-lg font-medium leading-6 text-[var(--foreground)] mb-4">tips per hour summary</h3>
-                <div className="mt-4 grid grid-cols-1 gap-6 sm:grid-cols-2 sm:gap-8 sm:divide-x sm:divide-gray-200 dark:sm:divide-gray-700">
-                  <div className="sm:pr-8">
-                  <h4 className="text-sm font-medium text-gray-500 dark:text-gray-400">bar</h4>
-                  <dl className="mt-2 grid grid-cols-2 gap-4">
-                    <div>
-                      <dt className="text-sm text-gray-500 dark:text-gray-400">cash tips/hour</dt>
-                        <dd className="text-base sm:text-lg font-medium text-[var(--foreground)]">${summary.barCashTipsPerHour.toFixed(2)}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-sm text-gray-500 dark:text-gray-400">credit tips/hour</dt>
-                        <dd className="text-base sm:text-lg font-medium text-[var(--foreground)]">${summary.barCreditTipsPerHour.toFixed(2)}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-sm text-gray-500 dark:text-gray-400">total tips/hour</dt>
-                        <dd className="text-base sm:text-lg font-medium text-[var(--foreground)]">${summary.barTipsPerHour.toFixed(2)}</dd>
-                    </div>
-                  </dl>
-                </div>
-                  <div className="sm:pl-8">
-                  <h4 className="text-sm font-medium text-gray-500 dark:text-gray-400">servers</h4>
-                  <dl className="mt-2 grid grid-cols-2 gap-4">
-                    <div>
-                      <dt className="text-sm text-gray-500 dark:text-gray-400">cash tips/hour</dt>
-                        <dd className="text-base sm:text-lg font-medium text-[var(--foreground)]">${summary.serverCashTipsPerHour.toFixed(2)}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-sm text-gray-500 dark:text-gray-400">credit tips/hour</dt>
-                        <dd className="text-base sm:text-lg font-medium text-[var(--foreground)]">${summary.serverCreditTipsPerHour.toFixed(2)}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-sm text-gray-500 dark:text-gray-400">total tips/hour</dt>
-                        <dd className="text-base sm:text-lg font-medium text-[var(--foreground)]">${summary.serverTipsPerHour.toFixed(2)}</dd>
-                    </div>
-                  </dl>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-12">
             <h2 className="text-xl font-semibold text-[var(--foreground)] mb-6">employee breakdown</h2>
             
             {/* Mobile card view */}

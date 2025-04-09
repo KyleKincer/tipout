@@ -63,7 +63,7 @@ describe('calculateTipouts', () => {
         const shiftWithoutRole = createMockShift({ role: undefined });
         // Create a mock shift where the role exists but configs array is explicitly undefined
         const shiftWithoutConfigs = createMockShift({
-            role: { name: 'Server', basePayRate: 10, configs: undefined as any } // Force undefined configs
+            role: { name: 'Server', basePayRate: 10, configs: undefined as unknown as RoleConfig[] } // Force undefined configs
         });
 
         expect(calculateTipouts(shiftWithoutRole, true, true, true)).toEqual({ barTipout: 0, hostTipout: 0, saTipout: 0 });
@@ -170,7 +170,7 @@ describe('roleReceivesTipoutType', () => {
 
     it('should return false if shift.role or shift.role.configs is null/undefined', () => {
         const shiftNoRole = createMockShift({ role: undefined });
-        const shiftNullConfigs = createMockShift({ role: { name: 'Test', basePayRate: 10, configs: null as any }});
+        const shiftNullConfigs = createMockShift({ role: { name: 'Test', basePayRate: 10, configs: null as unknown as RoleConfig[] }});
         expect(roleReceivesTipoutType(shiftNoRole, 'bar')).toBe(false);
         expect(roleReceivesTipoutType(shiftNullConfigs, 'bar')).toBe(false);
     });
@@ -210,7 +210,7 @@ describe('rolePaysTipoutType', () => {
 
      it('should return false if shift.role or shift.role.configs is null/undefined', () => {
         const shiftNoRole = createMockShift({ role: undefined });
-        const shiftNullConfigs = createMockShift({ role: { name: 'Test', basePayRate: 10, configs: null as any }});
+        const shiftNullConfigs = createMockShift({ role: { name: 'Test', basePayRate: 10, configs: null as unknown as RoleConfig[] }});
         expect(rolePaysTipoutType(shiftNoRole, 'bar')).toBe(false);
         expect(rolePaysTipoutType(shiftNullConfigs, 'bar')).toBe(false);
     });
@@ -255,7 +255,7 @@ describe('getRoleDistributionGroup', () => {
 
      it('should return null if shift.role or shift.role.configs is null/undefined', () => {
         const shiftNoRole = createMockShift({ role: undefined });
-        const shiftNullConfigs = createMockShift({ role: { name: 'Test', basePayRate: 10, configs: null as any }});
+        const shiftNullConfigs = createMockShift({ role: { name: 'Test', basePayRate: 10, configs: null as unknown as RoleConfig[] }});
         expect(getRoleDistributionGroup(shiftNoRole, 'bar')).toBe(null);
         expect(getRoleDistributionGroup(shiftNullConfigs, 'bar')).toBe(null);
     });

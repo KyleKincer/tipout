@@ -1218,10 +1218,11 @@ function ReportsContent() {
 
   // Fullscreen modal component
   const FullscreenModal = () => {
-    if (!fullscreenChart) return null;
-
     // Add effect to handle keyboard events and focus management
     useEffect(() => {
+      // Only run the effect logic if the modal is actually visible
+      if (!fullscreenChart) return;
+
       const handleKeyDown = (e: KeyboardEvent) => {
         if (e.key === 'Escape') {
           setFullscreenChart(null);
@@ -1230,12 +1231,12 @@ function ReportsContent() {
 
       // Add event listener
       document.addEventListener('keydown', handleKeyDown);
-      
+
       // Focus management - store the active element and focus the modal
       const previousActiveElement = document.activeElement as HTMLElement;
       const modalContainer = document.getElementById('fullscreen-modal-container');
       if (modalContainer) modalContainer.focus();
-      
+
       // Prevent scrolling on the body
       document.body.style.overflow = 'hidden';
 
@@ -1247,7 +1248,9 @@ function ReportsContent() {
         // Restore scrolling
         document.body.style.overflow = '';
       };
-    }, []);
+    }, [fullscreenChart]); // Add fullscreenChart to dependency array
+
+    if (!fullscreenChart) return null;
 
     // Get the fullscreen chart options
     const fullscreenOptions = getFullscreenChartOptions(fullscreenChart);
@@ -1979,4 +1982,4 @@ export default function ReportsPage() {
       <ReportsContent />
     </Suspense>
   )
-} 
+}

@@ -190,6 +190,19 @@ function ReportsContent() {
   }
 
   const calculateSummary = (): ReportSummary => {
+    // Determine role presence for each day
+    const dailyRolePresence = new Map<string, { hasHost: boolean; hasSA: boolean; hasBar: boolean }>();
+    shifts.forEach(shift => {
+      const date = shift.date.substring(0, 10); // Use YYYY-MM-DD as key
+      if (!dailyRolePresence.has(date)) {
+        dailyRolePresence.set(date, { hasHost: false, hasSA: false, hasBar: false });
+      }
+      const dailyInfo = dailyRolePresence.get(date)!;
+      if (roleReceivesTipoutType(shift, 'host')) dailyInfo.hasHost = true;
+      if (roleReceivesTipoutType(shift, 'sa')) dailyInfo.hasSA = true;
+      if (roleReceivesTipoutType(shift, 'bar')) dailyInfo.hasBar = true;
+    });
+
     const summary: ReportSummary = {
       totalShifts: 0,
       totalHours: 0,
@@ -207,29 +220,31 @@ function ReportsContent() {
       serverCreditTipsPerHour: 0,
     }
 
-    // Process all shifts for basic totals
+    // Process all shifts for basic totals and calculate daily tipouts
     shifts.forEach(shift => {
       summary.totalShifts += 1
       summary.totalHours += Number(shift.hours)
       summary.totalCashTips += Number(shift.cashTips)
       summary.totalCreditTips += Number(shift.creditTips)
       summary.totalLiquorSales += Number(shift.liquorSales)
-    })
 
-    // Check if there's at least one of each role type
-    const hasBar = shifts.some(shift => roleReceivesTipoutType(shift, 'bar'))
-    const hasHost = shifts.some(shift => roleReceivesTipoutType(shift, 'host'))
-    const hasSA = shifts.some(shift => roleReceivesTipoutType(shift, 'sa'))
+      // Calculate tipouts for this specific shift using daily presence flags
+      const date = shift.date.substring(0, 10);
+      const dailyInfo = dailyRolePresence.get(date) ?? { hasHost: false, hasSA: false, hasBar: false };
+      const { barTipout, hostTipout, saTipout } = calculateTipouts(shift, dailyInfo.hasHost, dailyInfo.hasSA, dailyInfo.hasBar);
 
-    // Calculate total tipouts
-    const allTipouts = shifts.map(shift => {
-      return calculateTipouts(shift, hasHost, hasSA, hasBar)
-    })
+      // Accumulate total tipouts paid *by* this shift's role
+      if (rolePaysTipoutType(shift, 'bar')) {
+          summary.totalBarTipout += barTipout;
+      }
+      if (rolePaysTipoutType(shift, 'host')) {
+          summary.totalHostTipout += hostTipout;
+      }
+      if (rolePaysTipoutType(shift, 'sa')) {
+          summary.totalSaTipout += saTipout;
+      }
+    });
 
-    summary.totalBarTipout = allTipouts.reduce((sum, { barTipout }) => sum + barTipout, 0)
-    summary.totalHostTipout = allTipouts.reduce((sum, { hostTipout }) => sum + hostTipout, 0)
-    summary.totalSaTipout = allTipouts.reduce((sum, { saTipout }) => sum + saTipout, 0)
-    
     // Get shifts by role category using configurations
     const barShifts = shifts.filter(shift => roleReceivesTipoutType(shift, 'bar'))
     const serverShifts = shifts.filter(shift => {
@@ -250,10 +265,11 @@ function ReportsContent() {
     const serverCashTips = serverShifts.reduce((acc, shift) => acc + Number(shift.cashTips), 0)
     const serverCreditTips = serverShifts.reduce((acc, shift) => acc + Number(shift.creditTips), 0)
 
-    // Server tipouts breakdown
-    
+    // Server tipouts breakdown - Use daily presence flags
     const serverHostAndSATipouts = serverShifts.reduce((sum, shift) => {
-      const { hostTipout, saTipout } = calculateTipouts(shift, hasHost, hasSA, hasBar)
+      const date = shift.date.substring(0, 10);
+      const dailyInfo = dailyRolePresence.get(date) ?? { hasHost: false, hasSA: false, hasBar: false };
+      const { hostTipout, saTipout } = calculateTipouts(shift, dailyInfo.hasHost, dailyInfo.hasSA, dailyInfo.hasBar)
       return sum + hostTipout + saTipout
     }, 0)
     
@@ -266,12 +282,16 @@ function ReportsContent() {
     const serverPayrollTips = serverCreditTips - serverHostAndSATipouts
     
     // Total bartender payroll tips = credit tips - tipout to hosts/SA + bar tipout received
-    const barPayrollTips = barCreditTips - 
-      barShifts.reduce((acc, shift) => {
-        const { hostTipout, saTipout } = calculateTipouts(shift, hasHost, hasSA, hasBar)
+    // Note: summary.totalBarTipout is now the total *paid* into the bar pool
+    // Need the total tipout paid by bartenders to host/sa using daily flags
+    const bartenderHostSATipouts = barShifts.reduce((acc, shift) => {
+        const date = shift.date.substring(0, 10);
+        const dailyInfo = dailyRolePresence.get(date) ?? { hasHost: false, hasSA: false, hasBar: false };
+        const { hostTipout, saTipout } = calculateTipouts(shift, dailyInfo.hasHost, dailyInfo.hasSA, dailyInfo.hasBar)
         return acc + hostTipout + saTipout
-      }, 0) + 
-      summary.totalBarTipout
+      }, 0);
+      
+    const barPayrollTips = barCreditTips - bartenderHostSATipouts + summary.totalBarTipout;
 
     // Calculate per-hour rates
     summary.barCashTipsPerHour = barHours > 0 ? barCashTips / barHours : 0
@@ -287,39 +307,41 @@ function ReportsContent() {
   }
 
   const calculateEmployeeRoleSummaries = (): EmployeeRoleSummary[] => {
-    const summaries = new Map<string, EmployeeRoleSummary>()
+    // Determine role presence for each day
+    const dailyRolePresence = new Map<string, { hasHost: boolean; hasSA: boolean; hasBar: boolean }>();
+    shifts.forEach(shift => {
+      const date = shift.date.substring(0, 10); // Use YYYY-MM-DD as key
+      if (!dailyRolePresence.has(date)) {
+        dailyRolePresence.set(date, { hasHost: false, hasSA: false, hasBar: false });
+      }
+      const dailyInfo = dailyRolePresence.get(date)!;
+      if (roleReceivesTipoutType(shift, 'host')) dailyInfo.hasHost = true;
+      if (roleReceivesTipoutType(shift, 'sa')) dailyInfo.hasSA = true;
+      if (roleReceivesTipoutType(shift, 'bar')) dailyInfo.hasBar = true;
+    });
     
-    // Group shifts by date to determine if hosts/SAs worked each day
+    const summaries = new Map<string, EmployeeRoleSummary>()
 
-    // Check if there's at least one host and SA
-    const hasHost = shifts.some(shift => roleReceivesTipoutType(shift, 'host'))
-    const hasSA = shifts.some(shift => roleReceivesTipoutType(shift, 'sa'))
-    const hasBar = shifts.some(shift => roleReceivesTipoutType(shift, 'bar'))
+    // Calculate total tipout pools based on daily presence
+    let totalBarTipout = 0;
+    let totalHostTipout = 0;
+    let totalSATipout = 0;
 
-    // Calculate total tipouts across all dates
-    const totalBarTipout = shifts.reduce((sum, shift) => {
+    shifts.forEach(shift => {
+      const date = shift.date.substring(0, 10);
+      const dailyInfo = dailyRolePresence.get(date) ?? { hasHost: false, hasSA: false, hasBar: false };
+      const { barTipout, hostTipout, saTipout } = calculateTipouts(shift, dailyInfo.hasHost, dailyInfo.hasSA, dailyInfo.hasBar);
+
       if (rolePaysTipoutType(shift, 'bar')) {
-        const { barTipout } = calculateTipouts(shift, hasHost, hasSA, hasBar)
-        return sum + barTipout
+        totalBarTipout += barTipout;
       }
-      return sum
-    }, 0)
-
-    const totalHostTipout = shifts.reduce((sum, shift) => {
       if (rolePaysTipoutType(shift, 'host')) {
-        const { hostTipout } = calculateTipouts(shift, hasHost, hasSA, hasBar)
-        return sum + hostTipout
+        totalHostTipout += hostTipout;
       }
-      return sum
-    }, 0)
-
-    const totalSATipout = shifts.reduce((sum, shift) => {
       if (rolePaysTipoutType(shift, 'sa')) {
-        const { saTipout } = calculateTipouts(shift, hasHost, hasSA, hasBar)
-        return sum + saTipout
+        totalSATipout += saTipout;
       }
-      return sum
-    }, 0)
+    });
 
     // Determine which roles receive which tipouts
     const roleGroups = new Map<string, Shift[]>()
@@ -362,10 +384,12 @@ function ReportsContent() {
     const serverCashTipsTotal = serverShifts.reduce((sum, shift) => sum + Number(shift.cashTips), 0)
     const serverCashTipsPerHour = serverHours > 0 ? serverCashTipsTotal / serverHours : 0
     
-    // Calculate server credit tips per hour rate - following spreadsheet formula
+    // Calculate server credit tips per hour rate - use daily flags
     const serverCreditTipsTotal = serverShifts.reduce((sum, shift) => sum + Number(shift.creditTips), 0)
     const serverHostSATipoutsTotal = serverShifts.reduce((sum, shift) => {
-      const { hostTipout, saTipout } = calculateTipouts(shift, hasHost, hasSA, hasBar)
+      const date = shift.date.substring(0, 10);
+      const dailyInfo = dailyRolePresence.get(date) ?? { hasHost: false, hasSA: false, hasBar: false };
+      const { hostTipout, saTipout } = calculateTipouts(shift, dailyInfo.hasHost, dailyInfo.hasSA, dailyInfo.hasBar)
       return sum + hostTipout + saTipout
     }, 0)
     const serverCreditTipsPerHour = serverHours > 0 ? 
@@ -375,10 +399,12 @@ function ReportsContent() {
     const bartenderCashTipsTotal = bartenderShifts.reduce((sum, shift) => sum + Number(shift.cashTips), 0)
     const bartenderCashTipsPerHour = bartenderHours > 0 ? bartenderCashTipsTotal / bartenderHours : 0
     
-    // Calculate bartender credit tips per hour rate
+    // Calculate bartender credit tips per hour rate - use daily flags
     const bartenderCreditTipsTotal = bartenderShifts.reduce((sum, shift) => sum + Number(shift.creditTips), 0)
     const bartenderTipoutsTotal = bartenderShifts.reduce((sum, shift) => {
-      const { hostTipout, saTipout } = calculateTipouts(shift, hasHost, hasSA, hasBar)
+      const date = shift.date.substring(0, 10);
+      const dailyInfo = dailyRolePresence.get(date) ?? { hasHost: false, hasSA: false, hasBar: false };
+      const { hostTipout, saTipout } = calculateTipouts(shift, dailyInfo.hasHost, dailyInfo.hasSA, dailyInfo.hasBar)
       return sum + hostTipout + saTipout
     }, 0)
     const bartenderCreditTipsPerHour = bartenderHours > 0 ? 
@@ -409,19 +435,23 @@ function ReportsContent() {
       existing.totalCreditTips += Number(shift.creditTips)
       existing.totalLiquorSales = (existing.totalLiquorSales || 0) + Number(shift.liquorSales) // Accumulate liquor sales
       
-      // Calculate tipouts this role pays
+      // Get daily presence flags for this shift's date
+      const date = shift.date.substring(0, 10);
+      const dailyInfo = dailyRolePresence.get(date) ?? { hasHost: false, hasSA: false, hasBar: false };
+      
+      // Calculate tipouts this role pays using daily flags
       if (rolePaysTipoutType(shift, 'bar') && !roleReceivesTipoutType(shift, 'bar')) {
-        const { barTipout } = calculateTipouts(shift, hasHost, hasSA, hasBar)
+        const { barTipout } = calculateTipouts(shift, dailyInfo.hasHost, dailyInfo.hasSA, dailyInfo.hasBar)
         existing.totalBarTipout -= barTipout
       }
       
       if (rolePaysTipoutType(shift, 'host') && !roleReceivesTipoutType(shift, 'host')) {
-        const { hostTipout } = calculateTipouts(shift, hasHost, hasSA, hasBar)
+        const { hostTipout } = calculateTipouts(shift, dailyInfo.hasHost, dailyInfo.hasSA, dailyInfo.hasBar)
         existing.totalHostTipout -= hostTipout
       }
       
       if (rolePaysTipoutType(shift, 'sa') && !roleReceivesTipoutType(shift, 'sa')) {
-        const { saTipout } = calculateTipouts(shift, hasHost, hasSA, hasBar)
+        const { saTipout } = calculateTipouts(shift, dailyInfo.hasHost, dailyInfo.hasSA, dailyInfo.hasBar)
         existing.totalSaTipout -= saTipout
       }
       
@@ -434,7 +464,7 @@ function ReportsContent() {
           const groupHours = distributionGroupHours.get(distributionGroup) || 0
           if (groupHours > 0) {
             const share = Number(shift.hours) / groupHours
-            existing.totalBarTipout += share * totalBarTipout
+            existing.totalBarTipout += share * totalBarTipout // Use the correctly calculated totalBarTipout pool
           }
         }
         
@@ -455,7 +485,7 @@ function ReportsContent() {
           const groupHours = distributionGroupHours.get(distributionGroup) || 0
           if (groupHours > 0) {
             const share = Number(shift.hours) / groupHours
-            existing.totalHostTipout += share * totalHostTipout
+            existing.totalHostTipout += share * totalHostTipout // Use the correctly calculated totalHostTipout pool
             console.log(`  After distribution: totalHostTipout=${existing.totalHostTipout}, share=${share}, hours=${shift.hours}, groupHours=${groupHours}`);
           }
         }
@@ -479,7 +509,7 @@ function ReportsContent() {
           const groupHours = distributionGroupHours.get(distributionGroup) || 0
           if (groupHours > 0) {
             const share = Number(shift.hours) / groupHours
-            existing.totalSaTipout += share * totalSATipout
+            existing.totalSaTipout += share * totalSATipout // Use the correctly calculated totalSATipout pool
             console.log(`  After distribution: totalSATipout=${existing.totalSaTipout}, share=${share}, hours=${shift.hours}, groupHours=${groupHours}`);
           }
         }
@@ -497,9 +527,10 @@ function ReportsContent() {
       if (serverShifts.some(s => s.id === shift.id)) {
         existing.cashTipsPerHour = serverCashTipsPerHour
         
-        // Calculate credit/payroll tips based on hours worked minus individual bar tipout
+        // Calculate credit/payroll tips based on hours worked minus individual bar tipout (using daily flags)
         // This matches the spreadsheet formula: (server credit/HR * hours) - bar tipout
-        const { barTipout } = calculateTipouts(shift, hasHost, hasSA, hasBar)
+        const { barTipout } = calculateTipouts(shift, dailyInfo.hasHost, dailyInfo.hasSA, dailyInfo.hasBar)
+        // Use the calculated serverCreditTipsPerHour which now accounts for daily flags in its underlying calculation
         const payrollTips = (serverCreditTipsPerHour * existing.totalHours) - barTipout
         existing.totalPayrollTips = payrollTips  // Store for debugging
         existing.creditTipsPerHour = existing.totalHours > 0 ? payrollTips / existing.totalHours : 0
@@ -1670,7 +1701,7 @@ function ReportsContent() {
                         ${(summary.totalTipsPerHour + summary.basePayRate).toFixed(2)}/hr
                       </p>
                       <p className="text-xs text-gray-500 dark:text-gray-400">
-                        {summary.totalHours} hours
+                        {summary.totalHours.toFixed(2)} hours
                       </p>
                     </div>
                   </div>
@@ -1846,7 +1877,7 @@ function ReportsContent() {
                             {summary.roleName}
                           </td>
                           <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
-                            {summary.totalHours}
+                            {summary.totalHours.toFixed(2)}
                           </td>
                           <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
                             ${summary.totalCashTips.toFixed(2)}

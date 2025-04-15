@@ -108,19 +108,29 @@ function ReportsContent() {
   const router = useRouter()
   const pathname = usePathname()
   const [employees, setEmployees] = useState<Employee[]>([])
-  const [shifts, setShifts] = useState<Shift[]>([])
+  // Rename 'shifts' state to 'filteredShifts' for clarity
+  const [filteredShifts, setFilteredShifts] = useState<Shift[]>([]) 
+  // Add state to hold all fetched shifts for the period
+  const [allShiftsData, setAllShiftsData] = useState<Shift[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isFilterLoading, setIsFilterLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [isDateRange, setIsDateRange] = useState(false)
+  const [isDateRange, setIsDateRange] = useState(() => {
+      const start = searchParams.get('startDate');
+      const end = searchParams.get('endDate');
+      return !!(start && end && start !== end);
+  });
   const [fullscreenChart, setFullscreenChart] = useState<string | null>(null)
   const [filters, setFilters] = useState(() => {
+    const start = searchParams.get('startDate') || format(new Date(), 'yyyy-MM-dd');
+    // Default endDate to startDate if not present or same as start
+    const end = searchParams.get('endDate') || start;
     return {
-      startDate: searchParams.get('startDate') || format(new Date(), 'yyyy-MM-dd'),
-      endDate: searchParams.get('endDate') || format(new Date(), 'yyyy-MM-dd'),
+      startDate: start,
+      endDate: end,
       employeeId: searchParams.get('employeeId') || '',
     }
-  })
+  });
 
   // Update filters when search params change
   useEffect(() => {
@@ -136,20 +146,23 @@ function ReportsContent() {
     const params = new URLSearchParams()
     
     if (filters.startDate) params.set('startDate', filters.startDate)
-    if (filters.endDate) params.set('endDate', filters.endDate)
+    // Only add endDate if it's a date range
+    if (isDateRange && filters.endDate) params.set('endDate', filters.endDate)
     if (filters.employeeId) params.set('employeeId', filters.employeeId)
 
     const newUrl = `${pathname}${params.toString() ? `?${params.toString()}` : ''}`
     router.push(newUrl)
-  }, [filters, pathname, router])
+  }, [filters, pathname, router, isDateRange])
 
   const fetchShifts = useCallback(async () => {
+    // Fetch ALL shifts for the date range, ignore employeeId filter here
     try {
-      setIsFilterLoading(true)
+      setIsLoading(true) // Use main loading indicator
+      setIsFilterLoading(true) // Indicate filter activity
       const queryParams = new URLSearchParams({
         startDate: filters.startDate,
         endDate: isDateRange ? filters.endDate : filters.startDate,
-        ...(filters.employeeId && { employeeId: filters.employeeId }),
+        // DO NOT include employeeId here
       })
 
       const response = await fetch(`/api/shifts?${queryParams}`)
@@ -157,15 +170,26 @@ function ReportsContent() {
         throw new Error('Failed to fetch shifts')
       }
       const data = await response.json()
-      setShifts(data)
+      setAllShiftsData(data) // Store all fetched data
     } catch (err) {
       setError('Failed to load shifts')
       console.error('Error loading shifts:', err)
     } finally {
-      setIsLoading(false)
-      setIsFilterLoading(false)
+      setIsLoading(false) // Stop main loading indicator
+      setIsFilterLoading(false) // Stop filter activity indicator
     }
-  }, [filters, isDateRange])
+  }, [filters.startDate, filters.endDate, isDateRange]) // Depend only on dates
+
+  // Effect to filter shifts for display based on allShiftsData and employeeId
+  useEffect(() => {
+    if (filters.employeeId) {
+      setFilteredShifts(
+        allShiftsData.filter(shift => shift.employee?.id === filters.employeeId)
+      );
+    } else {
+      setFilteredShifts(allShiftsData); // No filter, show all
+    }
+  }, [allShiftsData, filters.employeeId]);
 
   useEffect(() => {
     fetchEmployees()
@@ -189,10 +213,10 @@ function ReportsContent() {
     }
   }
 
-  const calculateSummary = (): ReportSummary => {
-    // Determine role presence for each day
+  const calculateSummary = (shiftsToProcess: Shift[]): ReportSummary => {
+    // Determine role presence for each day using all shifts data
     const dailyRolePresence = new Map<string, { hasHost: boolean; hasSA: boolean; hasBar: boolean }>();
-    shifts.forEach(shift => {
+    shiftsToProcess.forEach(shift => {
       const date = shift.date.substring(0, 10); // Use YYYY-MM-DD as key
       if (!dailyRolePresence.has(date)) {
         dailyRolePresence.set(date, { hasHost: false, hasSA: false, hasBar: false });
@@ -221,7 +245,7 @@ function ReportsContent() {
     }
 
     // Process all shifts for basic totals and calculate daily tipouts
-    shifts.forEach(shift => {
+    shiftsToProcess.forEach(shift => {
       summary.totalShifts += 1
       summary.totalHours += Number(shift.hours)
       summary.totalCashTips += Number(shift.cashTips)
@@ -246,8 +270,8 @@ function ReportsContent() {
     });
 
     // Get shifts by role category using configurations
-    const barShifts = shifts.filter(shift => roleReceivesTipoutType(shift, 'bar'))
-    const serverShifts = shifts.filter(shift => {
+    const barShifts = shiftsToProcess.filter(shift => roleReceivesTipoutType(shift, 'bar'))
+    const serverShifts = shiftsToProcess.filter(shift => {
       // Servers typically pay tipouts but don't receive any
       const paysTipout = shift.role.configs.some(config => config.paysTipout !== false)
       const receivesTipout = shift.role.configs.some(config => config.receivesTipout)
@@ -306,10 +330,10 @@ function ReportsContent() {
     return summary
   }
 
-  const calculateEmployeeRoleSummaries = (): EmployeeRoleSummary[] => {
-    // Determine role presence for each day
+  const calculateEmployeeRoleSummaries = (shiftsToProcess: Shift[]): EmployeeRoleSummary[] => {
+    // Determine role presence for each day using all shifts data
     const dailyRolePresence = new Map<string, { hasHost: boolean; hasSA: boolean; hasBar: boolean }>();
-    shifts.forEach(shift => {
+    shiftsToProcess.forEach(shift => {
       const date = shift.date.substring(0, 10); // Use YYYY-MM-DD as key
       if (!dailyRolePresence.has(date)) {
         dailyRolePresence.set(date, { hasHost: false, hasSA: false, hasBar: false });
@@ -327,7 +351,7 @@ function ReportsContent() {
     let totalHostTipout = 0;
     let totalSATipout = 0;
 
-    shifts.forEach(shift => {
+    shiftsToProcess.forEach(shift => {
       const date = shift.date.substring(0, 10);
       const dailyInfo = dailyRolePresence.get(date) ?? { hasHost: false, hasSA: false, hasBar: false };
       const { barTipout, hostTipout, saTipout } = calculateTipouts(shift, dailyInfo.hasHost, dailyInfo.hasSA, dailyInfo.hasBar);
@@ -347,7 +371,7 @@ function ReportsContent() {
     const roleGroups = new Map<string, Shift[]>()
     
     // Group shifts by role distribution group
-    shifts.forEach(shift => {
+    shiftsToProcess.forEach(shift => {
       shift.role.configs.forEach(config => {
         if (config.receivesTipout && config.distributionGroup) {
           if (!roleGroups.has(config.distributionGroup)) {
@@ -366,17 +390,17 @@ function ReportsContent() {
       distributionGroupHours.set(group, totalHours)
     })
 
-    // Group shifts by role for per-hour calculations
-    const serverShifts = shifts.filter(shift => {
+    // Group shifts by role for per-hour calculations using all shifts data
+    const serverShifts = shiftsToProcess.filter(shift => {
       // Servers typically pay tipouts but don't receive them
       return rolePaysTipoutType(shift, 'bar') && 
             !roleReceivesTipoutType(shift, 'bar') && 
             !roleReceivesTipoutType(shift, 'host') && 
             !roleReceivesTipoutType(shift, 'sa')
     })
-    const bartenderShifts = shifts.filter(shift => roleReceivesTipoutType(shift, 'bar'))
+    const bartenderShifts = shiftsToProcess.filter(shift => roleReceivesTipoutType(shift, 'bar'))
     
-    // Calculate total hours by role
+    // Calculate total hours by role using all shifts data
     const serverHours = serverShifts.reduce((sum, shift) => sum + Number(shift.hours), 0)
     const bartenderHours = bartenderShifts.reduce((sum, shift) => sum + Number(shift.hours), 0)
     
@@ -410,8 +434,8 @@ function ReportsContent() {
     const bartenderCreditTipsPerHour = bartenderHours > 0 ? 
       (bartenderCreditTipsTotal - bartenderTipoutsTotal + totalBarTipout) / bartenderHours : 0
 
-    // Process all shifts
-    shifts.forEach(shift => {
+    // Process all shifts using all shifts data
+    shiftsToProcess.forEach(shift => {
       const key = `${shift.employee.id}-${shift.role.name}`
       const existing = summaries.get(key) || {
         employeeId: shift.employee.id,
@@ -572,7 +596,7 @@ function ReportsContent() {
     Array.from(roleGroups.keys()).forEach(group => {
       // Find all employees who are part of this distribution group
       const groupSummaries = summariesArray.filter(summary => {
-        const shift = shifts.find(s => 
+        const shift = shiftsToProcess.find(s => 
           s.employee.id === summary.employeeId && 
           s.role.name === summary.roleName
         )
@@ -617,6 +641,7 @@ function ReportsContent() {
       })
     })
 
+    // Return all summaries calculated based on allShiftsData
     return Array.from(summaries.values())
   }
 
@@ -695,7 +720,7 @@ function ReportsContent() {
   // TipoutPerHourChart
   const TipoutPerHourChart = () => {
     // Filter by roles that actually have data
-    const roleData = employeeRoleSummaries.reduce((acc, summary) => {
+    const roleData = calculateEmployeeRoleSummaries(allShiftsData).reduce((acc, summary) => {
       if (!acc[summary.roleName]) {
         acc[summary.roleName] = {
           count: 0,
@@ -828,7 +853,7 @@ function ReportsContent() {
   // TipoutContributionChart
   const TipoutContributionChart = () => {
     // Group tipout data by employee
-    const employeeTipouts = employeeRoleSummaries.reduce((acc, summary) => {
+    const employeeTipouts = calculateEmployeeRoleSummaries(allShiftsData).reduce((acc, summary) => {
       if (!acc[summary.employeeName]) {
         acc[summary.employeeName] = {
           paid: 0,
@@ -972,7 +997,7 @@ function ReportsContent() {
     const uniqueRoles = new Set<string>();
     const roleConfigs: Record<string, Record<string, number>> = {};
     
-    shifts.forEach(shift => {
+    allShiftsData.forEach(shift => {
       const roleName = shift.role.name;
       if (!uniqueRoles.has(roleName)) {
         uniqueRoles.add(roleName);
@@ -1446,8 +1471,14 @@ function ReportsContent() {
     return <LoadingSpinner />
   }
 
-  const summary = calculateSummary()
-  const employeeRoleSummaries = calculateEmployeeRoleSummaries()
+  // Perform calculations using allShiftsData
+  const summary = calculateSummary(allShiftsData)
+  const allEmployeeRoleSummaries = calculateEmployeeRoleSummaries(allShiftsData)
+  
+  // Filter the calculated summaries for display if an employee filter is active
+  const displayedEmployeeSummaries = filters.employeeId
+    ? allEmployeeRoleSummaries.filter(s => s.employeeId === filters.employeeId)
+    : allEmployeeRoleSummaries;
 
   return (
     <div className="px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
@@ -1551,7 +1582,7 @@ function ReportsContent() {
         <div className="mt-8 flex justify-center">
           <LoadingSpinner />
         </div>
-      ) : shifts.length === 0 ? (
+      ) : filteredShifts.length === 0 ? (
         <div className="mt-8 text-center py-12">
           <svg
             className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500"
@@ -1676,7 +1707,7 @@ function ReportsContent() {
             
             {/* Mobile card view */}
             <div className="block md:hidden space-y-4">
-              {employeeRoleSummaries.map((summary) => (
+              {displayedEmployeeSummaries.map((summary) => (
                 <div
                   key={`${summary.employeeId}-${summary.roleName}-mobile`}
                   className="bg-white/50 dark:bg-gray-800/50 rounded-lg shadow border border-gray-200 dark:border-gray-700 p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50"
@@ -1856,7 +1887,7 @@ function ReportsContent() {
                       </tr>
                     </thead>
                     <tbody className="bg-white/50 dark:bg-gray-800/50 divide-y divide-gray-200 dark:divide-gray-700">
-                      {employeeRoleSummaries.map((summary) => (
+                      {displayedEmployeeSummaries.map((summary) => (
                         <tr 
                           key={`${summary.employeeId}-${summary.roleName}`}
                           className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50"

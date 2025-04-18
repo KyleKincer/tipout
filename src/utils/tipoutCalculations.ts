@@ -84,12 +84,11 @@ export const calculateTipouts = (shift: Shift, hasHost: boolean, hasSA: boolean,
         }
         break;
       case 'host':
-        // For debugging, temporarily ignore hasHost check
-        // if (hasHost) {
+        if (hasHost) {
           // Host tipout is calculated based on total tips
           hostTipout = totalTips * (config.percentageRate / 100);
           console.log('Calculated host tipout:', hostTipout);
-        // }
+        }
         break;
       case 'sa':
         if (hasSA) {

@@ -131,6 +131,8 @@ function ReportsContent() {
       employeeId: searchParams.get('employeeId') || '',
     }
   });
+  // Add state for grouping toggle
+  const [groupByEmployee, setGroupByEmployee] = useState(true)
 
   // Update filters when search params change
   useEffect(() => {
@@ -221,7 +223,7 @@ function ReportsContent() {
       if (!dailyRolePresence.has(date)) {
         dailyRolePresence.set(date, { hasHost: false, hasSA: false, hasBar: false });
       }
-      const dailyInfo = dailyRolePresence.get(date)!;
+      const dailyInfo = dailyRolePresence.get(date) ?? { hasHost: false, hasSA: false, hasBar: false };
       if (roleReceivesTipoutType(shift, 'host')) dailyInfo.hasHost = true;
       if (roleReceivesTipoutType(shift, 'sa')) dailyInfo.hasSA = true;
       if (roleReceivesTipoutType(shift, 'bar')) dailyInfo.hasBar = true;
@@ -643,6 +645,54 @@ function ReportsContent() {
 
     // Return all summaries calculated based on allShiftsData
     return Array.from(summaries.values())
+  }
+
+  // Helper: Group EmployeeRoleSummaries by employeeId
+  function groupSummariesByEmployee(summaries: EmployeeRoleSummary[]): EmployeeRoleSummary[] {
+    const grouped = new Map<string, EmployeeRoleSummary>()
+    for (const summary of summaries) {
+      const key = summary.employeeId
+      if (!grouped.has(key)) {
+        grouped.set(key, {
+          employeeId: summary.employeeId,
+          employeeName: summary.employeeName,
+          roleName: 'All Roles',
+          totalHours: 0,
+          totalCashTips: 0,
+          totalCreditTips: 0,
+          totalBarTipout: 0,
+          totalHostTipout: 0,
+          totalSaTipout: 0,
+          cashTipsPerHour: 0,
+          creditTipsPerHour: 0,
+          totalTipsPerHour: 0,
+          basePayRate: 0,
+          totalPayrollTips: 0,
+          totalLiquorSales: 0,
+          payrollTotal: 0,
+        })
+      }
+      const agg = grouped.get(key)!
+      agg.totalHours += summary.totalHours
+      agg.totalCashTips += summary.totalCashTips
+      agg.totalCreditTips += summary.totalCreditTips
+      agg.totalBarTipout += summary.totalBarTipout
+      agg.totalHostTipout += summary.totalHostTipout
+      agg.totalSaTipout += summary.totalSaTipout
+      agg.totalLiquorSales += summary.totalLiquorSales
+      agg.basePayRate += summary.basePayRate * summary.totalHours // for weighted avg
+      agg.totalPayrollTips = (agg.totalPayrollTips || 0) + (summary.totalPayrollTips || 0)
+      agg.payrollTotal = (agg.payrollTotal || 0) + (summary.payrollTotal || 0)
+    }
+    // After summing, calculate per-hour rates and weighted base pay
+    for (const agg of grouped.values()) {
+      agg.cashTipsPerHour = agg.totalHours > 0 ? agg.totalCashTips / agg.totalHours : 0
+      agg.creditTipsPerHour = agg.totalHours > 0 ? agg.totalCreditTips / agg.totalHours : 0
+      agg.totalTipsPerHour = agg.cashTipsPerHour + agg.creditTipsPerHour
+      agg.basePayRate = agg.totalHours > 0 ? agg.basePayRate / agg.totalHours : 0
+      // payrollTotal already summed
+    }
+    return Array.from(grouped.values())
   }
 
   // TipoutBreakdownChart
@@ -1474,11 +1524,15 @@ function ReportsContent() {
   // Perform calculations using allShiftsData
   const summary = calculateSummary(allShiftsData)
   const allEmployeeRoleSummaries = calculateEmployeeRoleSummaries(allShiftsData)
-  
   // Filter the calculated summaries for display if an employee filter is active
-  const displayedEmployeeSummaries = filters.employeeId
+  let displayedEmployeeSummaries = filters.employeeId
     ? allEmployeeRoleSummaries.filter(s => s.employeeId === filters.employeeId)
     : allEmployeeRoleSummaries;
+  if (groupByEmployee) {
+    displayedEmployeeSummaries = groupSummariesByEmployee(displayedEmployeeSummaries)
+  }
+  // Always sort alphabetically by employeeName
+  displayedEmployeeSummaries = displayedEmployeeSummaries.slice().sort((a, b) => a.employeeName.localeCompare(b.employeeName))
 
   return (
     <div className="px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
@@ -1703,18 +1757,46 @@ function ReportsContent() {
           </div>
 
           <div className="mt-12">
-            <h2 className="text-xl font-semibold text-[var(--foreground)] mb-6">employee breakdown</h2>
-            
+            <div className="flex items-center mb-4 gap-2">
+              <h2 className="text-xl font-semibold text-[var(--foreground)] mb-0">employee breakdown</h2>
+              <span className="text-sm text-gray-700 dark:text-gray-300 ml-4">by role</span>
+              <button
+                type="button"
+                onClick={() => setGroupByEmployee(g => !g)}
+                className={
+                  (groupByEmployee
+                    ? 'bg-indigo-600'
+                    : 'bg-gray-200 dark:bg-gray-700') +
+                  ' relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2'
+                }
+                aria-pressed={groupByEmployee}
+                aria-label="Toggle between grouping by employee or by role"
+              >
+                <span
+                  aria-hidden="true"
+                  className={
+                    (groupByEmployee
+                      ? 'translate-x-5'
+                      : 'translate-x-0') +
+                    ' pointer-events-none relative inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out'
+                  }
+                />
+              </button>
+              <span className="text-sm text-gray-700 dark:text-gray-300">by employee</span>
+              <span className="text-xs text-gray-500 dark:text-gray-400 ml-2" title="When grouped by employee, all roles and payroll are summed for each person.">
+                {groupByEmployee ? 'All roles and payroll are summed for each employee.' : 'Each row is a unique employee/role combination.'}
+              </span>
+            </div>
             {/* Mobile card view */}
             <div className="block md:hidden space-y-4">
               {displayedEmployeeSummaries.map((summary) => (
                 <div
-                  key={`${summary.employeeId}-${summary.roleName}-mobile`}
+                  key={`${summary.employeeId}-${groupByEmployee ? 'all' : summary.roleName}-mobile`}
                   className="bg-white/50 dark:bg-gray-800/50 rounded-lg shadow border border-gray-200 dark:border-gray-700 p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50"
                   onClick={() => {
                     const params = new URLSearchParams({
                       employeeId: summary.employeeId,
-                      role: summary.roleName,
+                      ...(groupByEmployee ? {} : { role: summary.roleName }),
                       startDate: filters.startDate,
                       endDate: isDateRange ? filters.endDate : filters.startDate,
                     })
@@ -1725,7 +1807,7 @@ function ReportsContent() {
                   <div className="flex justify-between items-start mb-4">
                     <div className="flex-grow">
                       <h3 className="text-base font-medium text-[var(--foreground)]">{summary.employeeName}</h3>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">{summary.roleName}</p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">{groupByEmployee ? 'All Roles' : summary.roleName}</p>
                     </div>
                     <div className="text-right">
                       <p className="text-sm font-medium text-green-600 dark:text-green-400">
@@ -1736,7 +1818,6 @@ function ReportsContent() {
                       </p>
                     </div>
                   </div>
-
                   {/* Tips Section */}
                   <div className="grid grid-cols-3 gap-4 mb-4">
                     <div>
@@ -1758,7 +1839,6 @@ function ReportsContent() {
                       </p>
                     </div>
                   </div>
-
                   {/* Tipouts Section */}
                   <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
                     <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">tipouts</p>
@@ -1801,7 +1881,6 @@ function ReportsContent() {
                       </div>
                     </div>
                   </div>
-
                   {/* Rates Section */}
                   <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
                     <div className="grid grid-cols-3 gap-4">
@@ -1834,7 +1913,6 @@ function ReportsContent() {
                 </div>
               ))}
             </div>
-
             {/* Desktop table view */}
             <div className="hidden md:block overflow-hidden bg-white/50 dark:bg-gray-800/50 shadow sm:rounded-lg border border-gray-200 dark:border-gray-700">
               <div className="overflow-x-auto">
@@ -1845,9 +1923,12 @@ function ReportsContent() {
                         <th scope="col" className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 dark:text-white sm:pl-6">
                           employee
                         </th>
-                        <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                          role
-                        </th>
+                        {/* Only show role column if not grouping by employee */}
+                        {!groupByEmployee && (
+                          <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
+                            role
+                          </th>
+                        )}
                         <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
                           hours
                         </th>
@@ -1889,12 +1970,12 @@ function ReportsContent() {
                     <tbody className="bg-white/50 dark:bg-gray-800/50 divide-y divide-gray-200 dark:divide-gray-700">
                       {displayedEmployeeSummaries.map((summary) => (
                         <tr 
-                          key={`${summary.employeeId}-${summary.roleName}`}
+                          key={`${summary.employeeId}-${groupByEmployee ? 'all' : summary.roleName}`}
                           className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50"
                           onClick={() => {
                             const params = new URLSearchParams({
                               employeeId: summary.employeeId,
-                              role: summary.roleName,
+                              ...(groupByEmployee ? {} : { role: summary.roleName }),
                               startDate: filters.startDate,
                               endDate: isDateRange ? filters.endDate : filters.startDate,
                             })
@@ -1904,9 +1985,12 @@ function ReportsContent() {
                           <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-[var(--foreground)] sm:pl-6">
                             {summary.employeeName}
                           </td>
-                          <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
-                            {summary.roleName}
-                          </td>
+                          {/* Only show role cell if not grouping by employee */}
+                          {!groupByEmployee && (
+                            <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
+                              {summary.roleName}
+                            </td>
+                          )}
                           <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
                             {summary.totalHours.toFixed(2)}
                           </td>

@@ -649,13 +649,23 @@ function ReportsContent() {
 
   // Helper: Group EmployeeRoleSummaries by employeeId
   function groupSummariesByEmployee(summaries: EmployeeRoleSummary[]): EmployeeRoleSummary[] {
-    const grouped = new Map<string, EmployeeRoleSummary>()
+    // Group all summaries by employeeId
+    const grouped = new Map<string, EmployeeRoleSummary[]>()
     for (const summary of summaries) {
       const key = summary.employeeId
-      if (!grouped.has(key)) {
-        grouped.set(key, {
-          employeeId: summary.employeeId,
-          employeeName: summary.employeeName,
+      if (!grouped.has(key)) grouped.set(key, [])
+      grouped.get(key)!.push(summary)
+    }
+    const result: EmployeeRoleSummary[] = []
+    for (const [employeeId, summariesForEmployee] of grouped.entries()) {
+      if (summariesForEmployee.length === 1) {
+        // Only one role: use the summary as-is
+        result.push(summariesForEmployee[0])
+      } else {
+        // Multiple roles: sum and recalculate
+        const agg = {
+          employeeId,
+          employeeName: summariesForEmployee[0].employeeName,
           roleName: 'All Roles',
           totalHours: 0,
           totalCashTips: 0,
@@ -670,29 +680,31 @@ function ReportsContent() {
           totalPayrollTips: 0,
           totalLiquorSales: 0,
           payrollTotal: 0,
-        })
+        } as EmployeeRoleSummary
+        for (const summary of summariesForEmployee) {
+          agg.totalHours += summary.totalHours
+          agg.totalCashTips += summary.totalCashTips
+          agg.totalCreditTips += summary.totalCreditTips
+          agg.totalBarTipout += summary.totalBarTipout
+          agg.totalHostTipout += summary.totalHostTipout
+          agg.totalSaTipout += summary.totalSaTipout
+          agg.totalLiquorSales += summary.totalLiquorSales
+          agg.basePayRate += summary.basePayRate * summary.totalHours // for weighted avg
+          agg.totalPayrollTips = (agg.totalPayrollTips || 0) + (summary.totalPayrollTips || 0)
+          agg.payrollTotal = (agg.payrollTotal || 0) + (summary.payrollTotal || 0)
+        }
+        // After summing, calculate per-hour rates and weighted base pay
+        agg.cashTipsPerHour = agg.totalHours > 0 ? agg.totalCashTips / agg.totalHours : 0
+        agg.creditTipsPerHour = agg.totalHours > 0 ? agg.totalCreditTips / agg.totalHours : 0
+        agg.totalTipsPerHour = agg.totalHours > 0
+          ? (agg.totalCashTips + agg.totalCreditTips + agg.totalBarTipout + agg.totalHostTipout + agg.totalSaTipout) / agg.totalHours
+          : 0
+        agg.basePayRate = agg.totalHours > 0 ? agg.basePayRate / agg.totalHours : 0
+        // payrollTotal already summed
+        result.push(agg)
       }
-      const agg = grouped.get(key)!
-      agg.totalHours += summary.totalHours
-      agg.totalCashTips += summary.totalCashTips
-      agg.totalCreditTips += summary.totalCreditTips
-      agg.totalBarTipout += summary.totalBarTipout
-      agg.totalHostTipout += summary.totalHostTipout
-      agg.totalSaTipout += summary.totalSaTipout
-      agg.totalLiquorSales += summary.totalLiquorSales
-      agg.basePayRate += summary.basePayRate * summary.totalHours // for weighted avg
-      agg.totalPayrollTips = (agg.totalPayrollTips || 0) + (summary.totalPayrollTips || 0)
-      agg.payrollTotal = (agg.payrollTotal || 0) + (summary.payrollTotal || 0)
     }
-    // After summing, calculate per-hour rates and weighted base pay
-    for (const agg of grouped.values()) {
-      agg.cashTipsPerHour = agg.totalHours > 0 ? agg.totalCashTips / agg.totalHours : 0
-      agg.creditTipsPerHour = agg.totalHours > 0 ? agg.totalCreditTips / agg.totalHours : 0
-      agg.totalTipsPerHour = agg.cashTipsPerHour + agg.creditTipsPerHour
-      agg.basePayRate = agg.totalHours > 0 ? agg.basePayRate / agg.totalHours : 0
-      // payrollTotal already summed
-    }
-    return Array.from(grouped.values())
+    return result
   }
 
   // TipoutBreakdownChart

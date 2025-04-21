@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { calculateOverallSummary, calculateEmployeeRoleSummariesDaily } from '../../../utils/reportCalculations';
+import { calculateOverallSummary, calculateEmployeeRoleSummariesDaily } from '@/utils/reportCalculations';
 import { Shift as ReportShift } from '@/types/reports';
 import { prisma as db } from '@/lib/prisma';
 import { Shift as PrismaShift, Employee as PrismaEmployee, Role as PrismaRole, RoleConfig as PrismaRoleConfig } from '@prisma/client';
@@ -87,8 +87,8 @@ async function fetchShiftsFromDB(startDate: string, endDate: string): Promise<Re
                 percentageRate: Number(config.percentageRate),
                 effectiveFrom: config.effectiveFrom.toISOString(),
                 effectiveTo: config.effectiveTo ? config.effectiveTo.toISOString() : null,
-                receivesTipout: config.receivesTipout ?? undefined,
-                paysTipout: config.paysTipout === null || config.paysTipout === undefined ? true : !!config.paysTipout,
+                receivesTipout: config.receivesTipout ?? true,
+                paysTipout: config.paysTipout ?? true,
                 distributionGroup: config.distributionGroup ?? undefined,
             })),
         },

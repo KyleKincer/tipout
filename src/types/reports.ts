@@ -11,7 +11,7 @@ export type Employee = {
  */
 export type RoleConfig = {
   id: string;
-  tipoutType: string;    // 'bar', 'host', 'sa', etc.
+  tipoutType: TipoutType;    // 'bar', 'host', 'sa', etc.
   percentageRate: number;
   effectiveFrom: string;
   effectiveTo: string | null;

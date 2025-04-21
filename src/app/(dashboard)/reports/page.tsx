@@ -19,58 +19,15 @@ import {
   LineElement
 } from 'chart.js'
 import { Bar, Doughnut } from 'react-chartjs-2'
-// Types will now likely come from the API response or a shared types file
-// import { ReportSummary, EmployeeRoleSummary, Employee } from '@/utils/reportCalculations'; // Example if types are shared
-
-// --- Type Definitions (Define based on API response structure) ---
-// It's best practice to define these based on the actual API response shape
-// or import from a shared types definition file (e.g., src/types.ts)
-
-type Employee = {
-  id: string
-  name: string
-}
-
-type ReportSummary = {
-  totalShifts: number
-  totalHours: number
-  totalCashTips: number
-  totalCreditTips: number
-  totalLiquorSales: number
-  totalBarTipoutPaid: number
-  totalHostTipoutPaid: number
-  totalSaTipoutPaid: number
-  // Add other fields if returned by calculateOverallSummary and needed by UI
-  // barTipsPerHour?: number;
-  // serverTipsPerHour?: number;
-}
-
-type EmployeeRoleSummary = {
-  employeeId: string
-  employeeName: string
-  roleName: string
-  totalHours: number
-  totalCashTips: number
-  totalCreditTips: number
-  totalBarTipout: number   // Net amount
-  totalHostTipout: number  // Net amount
-  totalSaTipout: number    // Net amount
-  cashTipsPerHour: number
-  creditTipsPerHour: number
-  totalTipsPerHour: number
-  basePayRate: number
-  totalPayrollTips: number
-  totalLiquorSales: number
-  payrollTotal: number
-}
+import { ReportSummary, EmployeeRoleSummary, Employee } from '@/types/reports';
 
 // API Response structure
 type ReportData = {
     summary: ReportSummary | null;
     employeeSummaries: EmployeeRoleSummary[];
     roleConfigs: Record<string, {
-        bar: number;
-        host: number;
+        barTipout: number;
+        hostTipout: number;
         sa: number;
     }>;
 }
@@ -639,14 +596,14 @@ function ReportsContent() {
       datasets: [
         {
           label: 'Bar Tipout (% of Liquor Sales)',
-          data: roles.map(role => roleConfigs[role].bar),
+          data: roles.map(role => roleConfigs[role].barTipout),
           backgroundColor: 'rgba(255, 99, 132, 0.7)',
           borderColor: 'rgba(255, 99, 132, 1)',
           borderWidth: 1,
         },
         {
           label: 'Host Tipout (% of Tips)',
-          data: roles.map(role => roleConfigs[role].host),
+          data: roles.map(role => roleConfigs[role].hostTipout),
           backgroundColor: 'rgba(75, 192, 192, 0.7)',
           borderColor: 'rgba(75, 192, 192, 1)',
           borderWidth: 1,
@@ -663,7 +620,7 @@ function ReportsContent() {
 
     // If no rates found, show a more informative message
     if (roles.length === 0 || !roles.some(role => 
-      roleConfigs[role].bar > 0 || roleConfigs[role].host > 0 || roleConfigs[role].sa > 0
+      roleConfigs[role].barTipout > 0 || roleConfigs[role].hostTipout > 0 || roleConfigs[role].sa > 0
     )) {
       return (
         <div className="h-full flex items-center justify-center">

@@ -34,7 +34,7 @@ export const calculateOverallSummary = (shiftsToProcess: Shift[]): ReportSummary
   // Determine role presence for each day within the processed shifts
   const dailyRolePresence = new Map<string, { hasHost: boolean; hasSA: boolean; hasBar: boolean }>();
   shiftsToProcess.forEach(shift => {
-    const date = shift.date.substring(0, 10); // Use YYYY-MM-DD as key
+    const date = shift.date.slice(0, 10); // Use YYYY-MM-DD as key
     if (!dailyRolePresence.has(date)) {
       dailyRolePresence.set(date, { hasHost: false, hasSA: false, hasBar: false });
     }
@@ -54,7 +54,7 @@ export const calculateOverallSummary = (shiftsToProcess: Shift[]): ReportSummary
     summary.totalLiquorSales += Number(shift.liquorSales);
 
     // Determine if tipouts should be calculated based on daily presence
-    const date = shift.date.substring(0, 10);
+    const date = shift.date.slice(0, 10);
     const dailyInfo = dailyRolePresence.get(date) ?? { hasHost: false, hasSA: false, hasBar: false };
     const { barTipout, hostTipout, saTipout } = calculateTipouts(shift, dailyInfo.hasHost, dailyInfo.hasSA, dailyInfo.hasBar);
 
@@ -91,7 +91,7 @@ export const calculateOverallSummary = (shiftsToProcess: Shift[]): ReportSummary
 
   // Bartender tipouts paid to Host/SA
   const bartenderHostSATipouts = barShifts.reduce((acc, shift) => {
-      const date = shift.date.substring(0, 10);
+      const date = shift.date.slice(0, 10);
       const dailyInfo = dailyRolePresence.get(date) ?? { hasHost: false, hasSA: false, hasBar: false };
       const { hostTipout, saTipout } = calculateTipouts(shift, dailyInfo.hasHost, dailyInfo.hasSA, dailyInfo.hasBar);
       return acc + hostTipout + saTipout;
@@ -99,7 +99,7 @@ export const calculateOverallSummary = (shiftsToProcess: Shift[]): ReportSummary
 
   // Server tipouts paid to Host/SA
   const serverHostSATipouts = serverShifts.reduce((sum, shift) => {
-    const date = shift.date.substring(0, 10);
+    const date = shift.date.slice(0, 10);
     const dailyInfo = dailyRolePresence.get(date) ?? { hasHost: false, hasSA: false, hasBar: false };
     const { hostTipout, saTipout } = calculateTipouts(shift, dailyInfo.hasHost, dailyInfo.hasSA, dailyInfo.hasBar);
     return sum + hostTipout + saTipout;
@@ -128,11 +128,11 @@ export const calculateEmployeeRoleSummariesDaily = (shiftsToProcess: Shift[]): E
   const summaries = new Map<string, EmployeeRoleSummary>();
 
   // Get unique dates from the shifts to process
-  const uniqueDates = Array.from(new Set(shiftsToProcess.map(shift => shift.date.substring(0, 10))));
+  const uniqueDates = Array.from(new Set(shiftsToProcess.map(shift => shift.date.slice(0, 10))));
 
   // Iterate through each day to calculate pools and distribute tips daily
   uniqueDates.forEach(date => {
-    const dailyShifts = shiftsToProcess.filter(shift => shift.date.substring(0, 10) === date);
+    const dailyShifts = shiftsToProcess.filter(shift => shift.date.slice(0, 10) === date);
     if (dailyShifts.length === 0) return; // Skip if no shifts on this date
 
     // 1. Determine daily role presence

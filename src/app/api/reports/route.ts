@@ -48,14 +48,9 @@ async function fetchShiftsFromDB(startDate: string, endDate: string): Promise<Re
                 select: { id: true, name: true },
             },
             role: {
-                select: {
-                    id: true,
-                    name: true,
-                    basePayRate: true,
-                    createdAt: true,
-                    updatedAt: true,
-                    configs: true,
-                },
+                include: { 
+                    configs: true // This includes all fields from RoleConfig, including tipPoolGroup
+                }, 
             },
         },
         orderBy: {
@@ -63,8 +58,9 @@ async function fetchShiftsFromDB(startDate: string, endDate: string): Promise<Re
         },
     });
 
-    // Map Prisma result to the ReportShift type
+    // Map Prisma result to the ReportShift type, including tipPoolGroup
     const reportShifts: ReportShift[] = shifts.filter(
+        // Ensure employee and role are non-null
         (shift): shift is ShiftWithIncludes & { employee: NonNullable<ShiftWithIncludes['employee']>, role: NonNullable<ShiftWithIncludes['role']> } =>
             !!shift.employee && !!shift.role
     ).map((shift) => ({
@@ -79,21 +75,25 @@ async function fetchShiftsFromDB(startDate: string, endDate: string): Promise<Re
             name: shift.employee.name,
         },
         role: {
+            id: shift.role.id,
             name: shift.role.name,
             basePayRate: Number(shift.role.basePayRate),
+            // Map configs, ensuring the target type ReportShift['role']['configs'] is compatible
             configs: (shift.role.configs || []).map((config) => ({
                 id: config.id,
-                tipoutType: config.tipoutType,
+                tipoutType: config.tipoutType, // Assuming ReportShift uses string here
                 percentageRate: Number(config.percentageRate),
                 effectiveFrom: config.effectiveFrom.toISOString(),
                 effectiveTo: config.effectiveTo ? config.effectiveTo.toISOString() : null,
-                receivesTipout: config.receivesTipout ?? true,
+                receivesTipout: config.receivesTipout ?? false,
                 paysTipout: config.paysTipout ?? true,
                 distributionGroup: config.distributionGroup ?? undefined,
+                tipPoolGroup: config.tipPoolGroup ?? undefined // Map the new field
             })),
         },
     }));
 
+    console.log(`Fetched ${reportShifts.length} shifts.`);
     return reportShifts;
 }
 
@@ -111,26 +111,29 @@ export async function GET(request: NextRequest) {
         const allShiftsData = await fetchShiftsFromDB(startDate, endDate);
 
         if (!allShiftsData || allShiftsData.length === 0) {
-            return NextResponse.json({ summary: null, employeeSummaries: [] });
+            return NextResponse.json({ summary: null, employeeSummaries: [], roleConfigs: {} });
         }
 
         // Get unique roles and their current configs
-        const roleConfigMap = new Map();
+        const roleConfigMap = new Map<string, Record<string, number>>();
         allShiftsData.forEach(shift => {
             if (!roleConfigMap.has(shift.role.name)) {
-                const roleConfigs = {
-                    bar: shift.role.configs.find(c => c.tipoutType === 'bar')?.percentageRate || 0,
-                    host: shift.role.configs.find(c => c.tipoutType === 'host')?.percentageRate || 0,
+                // Storing percentage rates directly for frontend display
+                const roleConfigRates = {
+                    barTipout: shift.role.configs.find(c => c.tipoutType === 'bar')?.percentageRate || 0,
+                    hostTipout: shift.role.configs.find(c => c.tipoutType === 'host')?.percentageRate || 0,
                     sa: shift.role.configs.find(c => c.tipoutType === 'sa')?.percentageRate || 0,
+                    // We might want other config details here later if needed
                 };
-                roleConfigMap.set(shift.role.name, roleConfigs);
+                roleConfigMap.set(shift.role.name, roleConfigRates);
             }
         });
 
         // Convert the map to an object for the response
-        const roleConfigs = Object.fromEntries(roleConfigMap);
+        const roleConfigsForResponse = Object.fromEntries(roleConfigMap);
 
-        // Calculate summaries
+        // Calculate summaries using the utility function
+        // Pass the fetched shifts directly
         const summary = calculateOverallSummary(allShiftsData);
         const employeeSummaries = calculateEmployeeRoleSummariesDaily(allShiftsData);
 
@@ -138,11 +141,19 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ 
             summary, 
             employeeSummaries,
-            roleConfigs 
+            roleConfigs: roleConfigsForResponse // Use the prepared object
         });
 
     } catch (error) {
         console.error("Error generating report:", error);
-        return NextResponse.json({ message: 'Error generating report data' }, { status: 500 });
+        // Consider logging the specific error or providing more context if safe
+        const errorMessage = 'Error generating report data'; // Use const
+        if (error instanceof Error) {
+            // Avoid exposing sensitive details, but log them
+            console.error("Detailed error:", error.message, error.stack);
+            // Optionally, provide a generic error or a more specific one if applicable
+            // errorMessage = `Failed to process report: ${error.message}`; // Use cautiously
+        }
+        return NextResponse.json({ message: errorMessage }, { status: 500 });
     }
 } 

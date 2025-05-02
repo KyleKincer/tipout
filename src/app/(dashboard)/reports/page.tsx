@@ -1237,22 +1237,28 @@ function ReportsContent() {
                         <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
                           liquor sales
                         </th>
-                        <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
+                        <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white"
+                          title="Net Bar Tipout: Positive if received, negative if paid. $0 for pooled roles as tipouts are handled pre-distribution."
+                        >
                           bar tipout
                         </th>
-                        <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
+                        <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white"
+                          title="Net Host Tipout: Positive if received, negative if paid. $0 for pooled roles as tipouts are handled pre-distribution."
+                        >
                           host tipout
                         </th>
-                        <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
+                        <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white"
+                          title="Net SA Tipout: Positive if received, negative if paid. $0 for pooled roles as tipouts are handled pre-distribution."
+                        >
                           sa tipout
                         </th>
                         <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white"
-                          title="Total credit tips received by this employee/role after any applicable tipouts paid into pools (Host, SA, Bar). Note: This might differ from raw Credit Tips collected."
+                          title="Total tips allocated for payroll: (Adjusted/Pooled Credit Tips) + (Net Received/Paid Distribution Tipouts)."
                         >
                           payroll tips
                         </th>
                         <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white"
-                          title="For pooled roles (Bartender, Host, SA), this reflects the average earnings per hour from the pool(s). For non-pooled roles (Server), reflects individual cash + calculated payroll tips per hour."
+                          title="Total net tips per hour: (Adjusted/Pooled Cash Tips + Payroll Tips) / Hours. Should be equal for roles in the same pool."
                         >
                           total tips/hour
                         </th>

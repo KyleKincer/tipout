@@ -15,42 +15,42 @@ datasource db {
 }
 
 model Employee {
-  id            String    @id @default(cuid())
+  id            String   @id @default(cuid())
   name          String
-  active        Boolean   @default(true)
+  active        Boolean  @default(true)
   defaultRoleId String?
-  defaultRole   Role?     @relation("DefaultRole", fields: [defaultRoleId], references: [id])
+  defaultRole   Role?    @relation("DefaultRole", fields: [defaultRoleId], references: [id])
   shifts        Shift[]
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }
 
 model Role {
-  id            String     @id @default(cuid())
-  name          String
-  basePayRate   Decimal    @default(0)
-  defaultFor    Employee[] @relation("DefaultRole")
-  shifts        Shift[]
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
-  configs       RoleConfig[]
+  id          String       @id @default(cuid())
+  name        String
+  basePayRate Decimal      @default(0)
+  defaultFor  Employee[]   @relation("DefaultRole")
+  shifts      Shift[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  configs     RoleConfig[]
 
   @@index([name])
 }
 
 model Shift {
-  id           String   @id @default(cuid())
-  employeeId   String
-  employee     Employee @relation(fields: [employeeId], references: [id])
-  roleId       String
-  role         Role     @relation(fields: [roleId], references: [id])
-  date         DateTime
-  hours        Decimal
-  cashTips     Decimal  @default(0)
-  creditTips   Decimal  @default(0)
-  liquorSales  Decimal  @default(0)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id          String   @id @default(cuid())
+  employeeId  String
+  employee    Employee @relation(fields: [employeeId], references: [id])
+  roleId      String
+  role        Role     @relation(fields: [roleId], references: [id])
+  date        DateTime
+  hours       Decimal
+  cashTips    Decimal  @default(0)
+  creditTips  Decimal  @default(0)
+  liquorSales Decimal  @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   @@index([date])
   @@index([employeeId])
@@ -58,19 +58,20 @@ model Shift {
 }
 
 model RoleConfig {
-  id             String    @id @default(uuid())
-  roleId         String
-  tipoutType     String
-  percentageRate Decimal   @default(0)
-  effectiveFrom  DateTime  @default(now())
-  effectiveTo    DateTime?
-  receivesTipout Boolean   @default(false)
-  paysTipout     Boolean   @default(true)  
+  id                String    @id @default(uuid())
+  roleId            String
+  tipoutType        String
+  percentageRate    Decimal   @default(0)
+  effectiveFrom     DateTime  @default(now())
+  effectiveTo       DateTime?
+  receivesTipout    Boolean   @default(false)
+  paysTipout        Boolean   @default(true)
   distributionGroup String?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-  role           Role      @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  tipPoolGroup      String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  role              Role      @relation(fields: [roleId], references: [id], onDelete: Cascade)
 
-  @@index([roleId])
   @@unique([roleId, tipoutType, effectiveFrom])
+  @@index([roleId])
 }

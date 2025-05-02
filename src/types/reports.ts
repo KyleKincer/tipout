@@ -17,7 +17,8 @@ export type RoleConfig = {
   effectiveTo: string | null;
   receivesTipout?: boolean;  // Whether this role receives tipout of this type
   paysTipout?: boolean;      // Whether this role pays tipout of this type
-  distributionGroup?: string; // For pooling tipouts (e.g., 'bartenders', 'hosts')
+  distributionGroup?: string; // For pooling tipouts RECEIVED FROM others (e.g., 'bartenders', 'hosts')
+  tipPoolGroup?: string;     // For pooling tips COLLECTED BY this role WITH others (e.g. "server_pool", "bartender_pool")
 };
 
 /**

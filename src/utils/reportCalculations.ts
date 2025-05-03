@@ -65,11 +65,14 @@ type ProcessedShift = Shift & {
   originalCashTips: number;
   originalCreditTips: number;
   tipPoolGroup: string | null;
-  // Add net tipout amounts calculated daily
-  netBarTipout: number;
-  netHostTipout: number;
-  netSaTipout: number;
-  payrollTips: number; // Calculated based on pooled/adjusted tips + net tipouts
+  // Store calculated paid/received amounts for THIS shift
+  paidBarTipout: number;
+  paidHostTipout: number;
+  paidSaTipout: number;
+  receivedBarTipout: number;
+  receivedHostTipout: number;
+  receivedSaTipout: number;
+  payrollTips: number; // Calculated based on pooled/adjusted tips + net tipouts/payments
 };
 
 /**
@@ -123,7 +126,13 @@ export const calculateOverallSummary = (shiftsToProcess: Shift[]): ReportSummary
     // Determine if tipouts should be calculated based on daily presence
     const date = shift.date.slice(0, 10);
     const dailyInfo = dailyRolePresence.get(date) ?? { hasHost: false, hasSA: false, hasBar: false };
-    const { barTipout, hostTipout, saTipout } = calculateTipouts(shift, dailyInfo.hasHost, dailyInfo.hasSA, dailyInfo.hasBar);
+    // Use original tips/sales to calculate the *contribution* amount
+    const shiftWithOriginalTips = {
+        ...shift,
+        cashTips: Number(shift.cashTips),
+        creditTips: Number(shift.creditTips)
+    };
+    const { barTipout, hostTipout, saTipout } = calculateTipouts(shiftWithOriginalTips, dailyInfo.hasHost, dailyInfo.hasSA, dailyInfo.hasBar);
 
     // Accumulate total tipouts paid *by* relevant roles
     if (rolePaysTipoutType(shift, 'bar')) {
@@ -156,25 +165,33 @@ export const calculateOverallSummary = (shiftsToProcess: Shift[]): ReportSummary
   const serverCashTips = serverShifts.reduce((acc, shift) => acc + Number(shift.cashTips), 0);
   const serverCreditTips = serverShifts.reduce((acc, shift) => acc + Number(shift.creditTips), 0);
 
-  // Bartender tipouts paid to Host/SA
+  // Bartender tipouts paid to Host/SA (based on original tips/sales)
   const bartenderHostSATipouts = barShifts.reduce((acc, shift) => {
       const date = shift.date.slice(0, 10);
       const dailyInfo = dailyRolePresence.get(date) ?? { hasHost: false, hasSA: false, hasBar: false };
-      const { hostTipout, saTipout } = calculateTipouts(shift, dailyInfo.hasHost, dailyInfo.hasSA, dailyInfo.hasBar);
-      return acc + hostTipout + saTipout;
+      const shiftWithOriginalTips = { ...shift, cashTips: Number(shift.cashTips), creditTips: Number(shift.creditTips) };
+      const { hostTipout, saTipout } = calculateTipouts(shiftWithOriginalTips, dailyInfo.hasHost, dailyInfo.hasSA, dailyInfo.hasBar);
+      let paid = 0;
+      if (rolePaysTipoutType(shift, 'host')) paid += hostTipout;
+      if (rolePaysTipoutType(shift, 'sa')) paid += saTipout;
+      return acc + paid;
     }, 0);
 
-  // Server tipouts paid to Host/SA
+  // Server tipouts paid to Host/SA (based on original tips/sales)
   const serverHostSATipouts = serverShifts.reduce((sum, shift) => {
     const date = shift.date.slice(0, 10);
     const dailyInfo = dailyRolePresence.get(date) ?? { hasHost: false, hasSA: false, hasBar: false };
-    const { hostTipout, saTipout } = calculateTipouts(shift, dailyInfo.hasHost, dailyInfo.hasSA, dailyInfo.hasBar);
-    return sum + hostTipout + saTipout;
+    const shiftWithOriginalTips = { ...shift, cashTips: Number(shift.cashTips), creditTips: Number(shift.creditTips) };
+    const { hostTipout, saTipout } = calculateTipouts(shiftWithOriginalTips, dailyInfo.hasHost, dailyInfo.hasSA, dailyInfo.hasBar);
+    let paid = 0;
+    if (rolePaysTipoutType(shift, 'host')) paid += hostTipout;
+    if (rolePaysTipoutType(shift, 'sa')) paid += saTipout;
+    return sum + paid;
   }, 0);
 
   // Calculate Payroll Tips for average rate calculation
-  const barPayrollTips = barCreditTips - bartenderHostSATipouts + summary.totalBarTipoutPaid; // CreditTips - PaidOut + ReceivedPool
-  const serverPayrollTips = serverCreditTips - serverHostSATipouts; // CreditTips - PaidOut
+  const barPayrollTips = barCreditTips - bartenderHostSATipouts + summary.totalBarTipoutPaid; // CreditTips - PaidOut(Host/SA) + ReceivedPool(Bar)
+  const serverPayrollTips = serverCreditTips - serverHostSATipouts - summary.totalBarTipoutPaid; // CreditTips - PaidOut(Host/SA) - PaidOut(Bar)
 
   // Calculate per-hour rates (Averages over the period)
   summary.barCashTipsPerHour = barHours > 0 ? barCashTips / barHours : 0;
@@ -206,8 +223,8 @@ export const calculateEmployeeRoleSummariesDaily = (shiftsToProcess: Shift[]): E
     // We need original tips for calculating tipouts PAID, but will modify tips for pooling.
     const dailyShifts: (Shift & { originalCashTips: number, originalCreditTips: number })[] = originalDailyShifts.map(s => ({
         ...s,
-        originalCashTips: s.cashTips,
-        originalCreditTips: s.creditTips,
+        originalCashTips: Number(s.cashTips), // Ensure numbers
+        originalCreditTips: Number(s.creditTips), // Ensure numbers
     }));
 
     // --- 1. TIP POOLING (Based on tipPoolGroup) ---
@@ -228,14 +245,9 @@ export const calculateEmployeeRoleSummariesDaily = (shiftsToProcess: Shift[]): E
     let dailyHasBar = false;
     dailyShifts.forEach(shift => {
       // Check if an active config exists for the type and receivesTipout is not explicitly false
-      const hostConfig = findActiveConfig(shift, 'host');
-      if (hostConfig && hostConfig.receivesTipout !== false) dailyHasHost = true;
-      
-      const saConfig = findActiveConfig(shift, 'sa');
-      if (saConfig && saConfig.receivesTipout !== false) dailyHasSA = true;
-      
-      const barConfig = findActiveConfig(shift, 'bar');
-      if (barConfig && barConfig.receivesTipout !== false) dailyHasBar = true; 
+      if (roleReceivesTipoutType(shift, 'host')) dailyHasHost = true;
+      if (roleReceivesTipoutType(shift, 'sa')) dailyHasSA = true;
+      if (roleReceivesTipoutType(shift, 'bar')) dailyHasBar = true;
     });
 
     // Group shifts into pools and calculate pool's gross tips/hours
@@ -243,10 +255,10 @@ export const calculateEmployeeRoleSummariesDaily = (shiftsToProcess: Shift[]): E
       const poolGroup = getShiftTipPoolGroup(shift);
       if (poolGroup) {
         if (!tipPools.has(poolGroup)) {
-          tipPools.set(poolGroup, { 
-            totalCashTips: 0, 
-            totalCreditTips: 0, 
-            totalHours: 0, 
+          tipPools.set(poolGroup, {
+            totalCashTips: 0,
+            totalCreditTips: 0,
+            totalHours: 0,
             shifts: [],
             totalPaidBarTipout: 0,
             totalPaidHostTipout: 0,
@@ -264,7 +276,7 @@ export const calculateEmployeeRoleSummariesDaily = (shiftsToProcess: Shift[]): E
 
     // Calculate total tipouts paid BY each pool and then the net rates
     tipPools.forEach((pool) => {
-      // Calculate total tipouts paid by this pool's shifts
+      // Calculate total tipouts paid by this pool's shifts using ORIGINAL tips
       pool.shifts.forEach(shiftInPool => {
         const shiftWithOriginalTips = {
           ...shiftInPool,
@@ -272,15 +284,16 @@ export const calculateEmployeeRoleSummariesDaily = (shiftsToProcess: Shift[]): E
           creditTips: shiftInPool.originalCreditTips
         };
         const { barTipout, hostTipout, saTipout } = calculateTipouts(shiftWithOriginalTips, dailyHasHost, dailyHasSA, dailyHasBar);
+        // Accumulate tipouts the POOL is responsible for paying out
         if (rolePaysTipoutType(shiftInPool, 'bar')) pool.totalPaidBarTipout += barTipout;
         if (rolePaysTipoutType(shiftInPool, 'host')) pool.totalPaidHostTipout += hostTipout;
         if (rolePaysTipoutType(shiftInPool, 'sa')) pool.totalPaidSaTipout += saTipout;
       });
 
       // Calculate NET pool tips (assuming tipouts paid from credit)
-      // Adjust this logic if cash tips also contribute to tipouts
-      const poolNetCashTips = pool.totalCashTips; 
-      const poolNetCreditTips = pool.totalCreditTips - pool.totalPaidHostTipout - pool.totalPaidSaTipout; // Remove bar tipout from pool deduction
+      // Pool pays Host and SA tipouts. Bar tipout is paid individually.
+      const poolNetCashTips = pool.totalCashTips;
+      const poolNetCreditTips = pool.totalCreditTips - pool.totalPaidHostTipout - pool.totalPaidSaTipout;
 
       if (pool.totalHours > 0) {
         const netPoolCashRate = poolNetCashTips / pool.totalHours;
@@ -288,9 +301,9 @@ export const calculateEmployeeRoleSummariesDaily = (shiftsToProcess: Shift[]): E
 
         // Adjust each shift's tips to reflect their NET share of the pool
         pool.shifts.forEach(shift => {
-          shift.cashTips = Number(shift.hours) * netPoolCashRate;
-          shift.creditTips = Number(shift.hours) * netPoolCreditRate;
-          console.log(`Shift ${shift.id} (${shift.role.name}) NET adjusted tips: Cash=$${shift.cashTips.toFixed(2)}, Credit=$${shift.creditTips.toFixed(2)} from NET pool rate`);
+          shift.cashTips = Number(shift.hours) * netPoolCashRate; // NET cash share
+          shift.creditTips = Number(shift.hours) * netPoolCreditRate; // NET credit share (after pool deductions)
+          console.log(`Shift ${shift.id} (${shift.role?.name}) NET adjusted tips: Cash=$${shift.cashTips.toFixed(2)}, Credit=$${shift.creditTips.toFixed(2)} from NET pool rate`);
         });
       } else {
          pool.shifts.forEach(shift => {
@@ -299,18 +312,15 @@ export const calculateEmployeeRoleSummariesDaily = (shiftsToProcess: Shift[]): E
          });
       }
     });
-    // Shifts NOT in a pool retain their original cashTips/creditTips at this stage
-    // They will have tipouts calculated individually later.
+    // Shifts NOT in a pool retain their original cashTips/creditTips at this stage.
 
     // --- 2. Calculate total daily tipout pools (paid INTO distribution pools) ---
-    // This is for roles RECEIVING tipouts (Host, SA, Bar). It needs the total contributions
-    // from ALL shifts (pooled or not), calculated based on their ORIGINAL performance.
+    // Calculated based on ORIGINAL performance of ALL shifts.
     let dailyBarTipoutPool = 0;
     let dailyHostTipoutPool = 0;
     let dailySATipoutPool = 0;
 
     dailyShifts.forEach(shift => {
-      // Use original tips/sales for calculating contributions to distribution pools
       const shiftWithOriginalTips = {
           ...shift,
           cashTips: shift.originalCashTips,
@@ -325,30 +335,28 @@ export const calculateEmployeeRoleSummariesDaily = (shiftsToProcess: Shift[]): E
     // --- 4. Calculate daily hours for roles within DISTRIBUTION groups (for receiving tipouts) ---
     const dailyDistributionGroupHours = new Map<string, number>();
     dailyShifts.forEach(shift => {
-      shift.role?.configs.forEach(config => {
-        if (config.receivesTipout && config.distributionGroup) {
-          const currentHours = dailyDistributionGroupHours.get(config.distributionGroup) || 0;
-          dailyDistributionGroupHours.set(config.distributionGroup, currentHours + Number(shift.hours));
-        }
-      });
+      const barGroup = getRoleDistributionGroup(shift, 'bar');
+      if (barGroup) dailyDistributionGroupHours.set(barGroup, (dailyDistributionGroupHours.get(barGroup) || 0) + Number(shift.hours));
+
+      const hostGroup = getRoleDistributionGroup(shift, 'host');
+      if (hostGroup) dailyDistributionGroupHours.set(hostGroup, (dailyDistributionGroupHours.get(hostGroup) || 0) + Number(shift.hours));
+
+      const saGroup = getRoleDistributionGroup(shift, 'sa');
+      if (saGroup) dailyDistributionGroupHours.set(saGroup, (dailyDistributionGroupHours.get(saGroup) || 0) + Number(shift.hours));
     });
 
-    // --- 5. Process each shift for the day: Calculate net received tipouts and final payroll tips ---
+
+    // --- 5. Process each shift for the day: Calculate paid/received tipouts and final payroll tips ---
     dailyShifts.forEach(shift => {
       if (!shift.employee || !shift.role) return;
 
-      const isInPool = !!getShiftTipPoolGroup(shift);
-      let netBarTipout = 0;
-      let netHostTipout = 0;
-      let netSaTipout = 0;
       let payrollTips = 0;
 
-      // --- Calculate Received Tipouts (Needed for both Pooled and Non-Pooled Payroll Tips) ---
+      // --- Calculate Received Tipouts (Based on daily pools and shift hours) ---
       let receivedBar = 0;
       let receivedHost = 0;
       let receivedSA = 0;
 
-      // Calculate received amounts from *daily* distribution pools based on this shift's hours and role config
       if (roleReceivesTipoutType(shift, 'bar')) {
         const distributionGroup = getRoleDistributionGroup(shift, 'bar');
         const groupTotalHours = distributionGroup ? dailyDistributionGroupHours.get(distributionGroup) : 0;
@@ -370,44 +378,35 @@ export const calculateEmployeeRoleSummariesDaily = (shiftsToProcess: Shift[]): E
             receivedSA = (Number(shift.hours) / groupTotalHours) * dailySATipoutPool;
           }
       }
-      // --- End Calculate Received Tipouts ---
+
+      // --- Calculate Paid Tipouts (Based on THIS shift's ORIGINAL tips/sales) ---
+      const shiftWithOriginalTips = {
+        ...shift,
+        cashTips: shift.originalCashTips,
+        creditTips: shift.originalCreditTips
+      };
+      const { barTipout, hostTipout, saTipout } = calculateTipouts(shiftWithOriginalTips, dailyHasHost, dailyHasSA, dailyHasBar);
+
+      const paidBar = rolePaysTipoutType(shift, 'bar') ? barTipout : 0;
+      const paidHost = rolePaysTipoutType(shift, 'host') ? hostTipout : 0;
+      const paidSA = rolePaysTipoutType(shift, 'sa') ? saTipout : 0;
+
+
+      // --- Calculate Payroll Tips ---
+      const isInPool = !!getShiftTipPoolGroup(shift);
 
       if (isInPool) {
-        // Pooled shifts already have NET tips assigned (shift.creditTips reflects net pool share).
-        // Their contribution to distribution pools was handled at the pool level.
-        // Instead of always zero, show negative if paid tipout (contributed to pool), positive if received (role).
-        const { barTipout, hostTipout, saTipout } = calculateTipouts(shift, dailyHasHost, dailyHasSA, dailyHasBar);
-        const paidBar = rolePaysTipoutType(shift, 'bar') ? barTipout : 0;
-        const paidHost = rolePaysTipoutType(shift, 'host') ? hostTipout : 0;
-        const paidSA = rolePaysTipoutType(shift, 'sa') ? saTipout : 0;
-        // Show net tipouts as received - paid (can be negative or positive)
-        netBarTipout = receivedBar - paidBar;
-        netHostTipout = receivedHost - paidHost;
-        netSaTipout = receivedSA - paidSA;
-        // Payroll Tips for pooled roles = Net Pooled Credit Share + Received Distribution Tipouts - All Paid Tipouts
-        payrollTips = shift.creditTips + receivedBar + receivedHost + receivedSA - paidBar - paidHost - paidSA;
+        // Payroll Tips for pooled = Net Pooled Credit Share + Received Tipouts - Paid Bar Tipout (Host/SA handled by pool)
+        payrollTips = shift.creditTips + receivedBar + receivedHost + receivedSA - paidBar; // Use adjusted shift.creditTips
+         console.log(`Pooled Shift ${shift.id} Payroll: ${shift.creditTips.toFixed(2)} (Net Pool) + ${receivedBar.toFixed(2)} (Rec Bar) + ${receivedHost.toFixed(2)} (Rec Host) + ${receivedSA.toFixed(2)} (Rec SA) - ${paidBar.toFixed(2)} (Paid Bar) = ${payrollTips.toFixed(2)}`);
       } else {
-        // NON-POOLED shifts: Calculate tipouts paid and received individually.
-        const shiftWithOriginalTips = {
-            ...shift,
-            cashTips: shift.originalCashTips,
-            creditTips: shift.originalCreditTips
-        };
-        const { barTipout: paidBar, hostTipout: paidHost, saTipout: paidSA } = calculateTipouts(shiftWithOriginalTips, dailyHasHost, dailyHasSA, dailyHasBar);
-        
-        // Note: receivedBar, receivedHost, receivedSA already calculated above
+        // Payroll Tips for non-pooled = Original Credit Tips + Received Tipouts - Paid Tipouts
+        payrollTips = shift.originalCreditTips + receivedBar + receivedHost + receivedSA - paidBar - paidHost - paidSA;
+        console.log(`Non-Pooled Shift ${shift.id} Payroll: ${shift.originalCreditTips.toFixed(2)} (Orig) + ${receivedBar.toFixed(2)} (Rec Bar) + ${receivedHost.toFixed(2)} (Rec Host) + ${receivedSA.toFixed(2)} (Rec SA) - ${paidBar.toFixed(2)} (Paid Bar) - ${paidHost.toFixed(2)} (Paid Host) - ${paidSA.toFixed(2)} (Paid SA) = ${payrollTips.toFixed(2)}`);
 
-        // Calculate NET tipouts for this non-pooled shift (for display)
-        netBarTipout = receivedBar - (rolePaysTipoutType(shift, 'bar') ? paidBar : 0);
-        netHostTipout = receivedHost - (rolePaysTipoutType(shift, 'host') ? paidHost : 0);
-        netSaTipout = receivedSA - (rolePaysTipoutType(shift, 'sa') ? paidSA : 0);
-
-        // Payroll Tips = Original Credit Tips + Net Tipouts Received/Paid
-        payrollTips = shift.originalCreditTips + netBarTipout + netHostTipout + netSaTipout;
-        
-        // Use original tips for aggregation base if not pooled
+        // Use original tips for the base cash/credit display if not pooled
         shift.cashTips = shift.originalCashTips;
-        shift.creditTips = shift.originalCreditTips; 
+        shift.creditTips = shift.originalCreditTips;
       }
 
       // Store the processed shift data for final aggregation
@@ -415,10 +414,14 @@ export const calculateEmployeeRoleSummariesDaily = (shiftsToProcess: Shift[]): E
         ...shift, // Includes original or net pooled cash/credit tips
         originalCashTips: shift.originalCashTips,
         originalCreditTips: shift.originalCreditTips,
-        netBarTipout, // For non-pooled: net paid/received; For pooled: 0
-        netHostTipout,// For non-pooled: net paid/received; For pooled: 0
-        netSaTipout,  // For non-pooled: net paid/received; For pooled: 0
-        payrollTips, // Contains the final payroll-relevant tip amount (fixed)
+        // Store the specific paid/received amounts for this shift for summary display
+        paidBarTipout: paidBar,
+        paidHostTipout: paidHost,
+        paidSaTipout: paidSA,
+        receivedBarTipout: receivedBar,
+        receivedHostTipout: receivedHost,
+        receivedSaTipout: receivedSA,
+        payrollTips, // Contains the final payroll-relevant tip amount
         tipPoolGroup: getShiftTipPoolGroup(shift),
       });
     });
@@ -428,38 +431,46 @@ export const calculateEmployeeRoleSummariesDaily = (shiftsToProcess: Shift[]): E
   const summaries = new Map<string, EmployeeRoleSummary>();
   dailyProcessedShifts.forEach(procShift => {
       const key = `${procShift.employee.id}-${procShift.role.name}`;
-      const existing = summaries.get(key) || {
-        employeeId: procShift.employee.id,
-        employeeName: procShift.employee.name,
-        roleName: procShift.role.name,
-        totalHours: 0,
-        totalCashTips: 0,        // Accumulate NET cash tips (pooled or original)
-        totalCreditTips: 0,      // Accumulate NET credit tips (pooled or original)
-        totalGrossCreditTips: 0, // New: Accumulate original gross credit tips
-        totalBarTipout: 0,       // Accumulate NET amounts (0 for pooled in current logic)
-        totalHostTipout: 0,      // Accumulate NET amounts (0 for pooled in current logic)
-        totalSaTipout: 0,        // Accumulate NET amounts (0 for pooled in current logic)
-        cashTipsPerHour: 0,
-        creditTipsPerHour: 0,
-        totalTipsPerHour: 0,
-        basePayRate: Number(procShift.role.basePayRate),
-        totalPayrollTips: 0,     // Accumulate final payrollTips amount
-        totalLiquorSales: 0,
-        payrollTotal: 0,
-        tipPoolGroup: procShift.tipPoolGroup,
-      };
+      let existing = summaries.get(key);
+
+       if (!existing) {
+            existing = {
+                employeeId: procShift.employee.id,
+                employeeName: procShift.employee.name,
+                roleName: procShift.role.name,
+                totalHours: 0,
+                totalCashTips: 0,        // Accumulate NET cash tips (pooled or original)
+                totalCreditTips: 0,      // Accumulate NET credit tips (pooled or original) - Base for display
+                totalGrossCreditTips: 0, // Accumulate original gross credit tips
+                // These now represent Received - Paid for this employee/role combo
+                totalBarTipout: 0,
+                totalHostTipout: 0,
+                totalSaTipout: 0,
+                cashTipsPerHour: 0,
+                creditTipsPerHour: 0,
+                totalTipsPerHour: 0,
+                basePayRate: Number(procShift.role.basePayRate),
+                totalPayrollTips: 0,     // Accumulate final payrollTips amount
+                totalLiquorSales: 0,
+                payrollTotal: 0,
+                tipPoolGroup: procShift.tipPoolGroup, // Assign first time, assume constant
+            };
+        }
+
 
       // Accumulate totals from the processed shift
       existing.totalHours += Number(procShift.hours);
       existing.totalCashTips += procShift.cashTips; // Use net pooled or original cash
-      existing.totalCreditTips += procShift.creditTips; 
-      existing.totalGrossCreditTips += procShift.originalCreditTips;   // New accumulation of gross credit
+      existing.totalCreditTips += procShift.creditTips; // Use net pooled or original credit (base for display)
+      existing.totalGrossCreditTips += procShift.originalCreditTips; // Accumulate original gross credit
       existing.totalLiquorSales += Number(procShift.liquorSales);
-      existing.totalBarTipout += procShift.netBarTipout;   // Will be 0 for pooled shifts in current logic
-      existing.totalHostTipout += procShift.netHostTipout; // Will be 0 for pooled shifts in current logic
-      existing.totalSaTipout += procShift.netSaTipout;   // Will be 0 for pooled shifts in current logic
+      // Accumulate Net Tipouts (Received - Paid for this summary group)
+      existing.totalBarTipout += procShift.receivedBarTipout - procShift.paidBarTipout;
+      existing.totalHostTipout += procShift.receivedHostTipout - procShift.paidHostTipout;
+      existing.totalSaTipout += procShift.receivedSaTipout - procShift.paidSaTipout;
       existing.totalPayrollTips += procShift.payrollTips; // Use the calculated payrollTips
-      existing.basePayRate = Number(procShift.role.basePayRate); 
+      // Update base pay rate - might need logic if it can change mid-period for same emp/role
+      existing.basePayRate = Number(procShift.role.basePayRate);
 
       summaries.set(key, existing);
   });
@@ -477,6 +488,21 @@ export const calculateEmployeeRoleSummariesDaily = (shiftsToProcess: Shift[]): E
 
     // Calculate final payroll total
     summary.payrollTotal = (summary.basePayRate * summary.totalHours) + summary.totalPayrollTips;
+
+    // Optional: Round final values for cleaner display
+    summary.totalCashTips = parseFloat(summary.totalCashTips.toFixed(2));
+    summary.totalCreditTips = parseFloat(summary.totalCreditTips.toFixed(2)); // This is the NET pool or original amount
+    summary.totalGrossCreditTips = parseFloat(summary.totalGrossCreditTips.toFixed(2));
+    summary.totalBarTipout = parseFloat(summary.totalBarTipout.toFixed(2));
+    summary.totalHostTipout = parseFloat(summary.totalHostTipout.toFixed(2));
+    summary.totalSaTipout = parseFloat(summary.totalSaTipout.toFixed(2));
+    summary.totalPayrollTips = parseFloat(summary.totalPayrollTips.toFixed(2));
+    summary.payrollTotal = parseFloat(summary.payrollTotal.toFixed(2));
+    summary.cashTipsPerHour = parseFloat(summary.cashTipsPerHour.toFixed(2));
+    summary.creditTipsPerHour = parseFloat(summary.creditTipsPerHour.toFixed(2));
+    summary.totalTipsPerHour = parseFloat(summary.totalTipsPerHour.toFixed(2));
+
+
   });
 
   return finalSummaries;

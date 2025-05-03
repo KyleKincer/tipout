@@ -31,8 +31,39 @@ type Shift = {
   liquorSales: number;
 };
 
+import { isWithinInterval, parseISO, isBefore, isEqual } from 'date-fns';
+
+// Helper function to find the active configuration for a specific type and date
+const findActiveConfig = (shift: Shift, tipoutType: string): RoleConfig | null => {
+  if (!shift.role?.configs) return null;
+  
+  const shiftDate = parseISO(shift.date); // Parse the shift date string once
+  
+  const activeConfig = shift.role.configs.find(config => {
+    if (config.tipoutType !== tipoutType) return false;
+    
+    const effectiveFrom = parseISO(config.effectiveFrom);
+    // Check if shift date is on or after effectiveFrom
+    const isAfterOrOnFrom = isEqual(shiftDate, effectiveFrom) || isBefore(effectiveFrom, shiftDate);
+    if (!isAfterOrOnFrom) return false;
+    
+    // Check effectiveTo
+    if (config.effectiveTo) {
+      const effectiveTo = parseISO(config.effectiveTo);
+      // Check if shift date is on or before effectiveTo
+      const isOnOrBeforeTo = isEqual(shiftDate, effectiveTo) || isBefore(shiftDate, effectiveTo);
+      return isOnOrBeforeTo;
+    } else {
+      // If effectiveTo is null, it's active indefinitely from effectiveFrom
+      return true;
+    }
+  });
+  
+  return activeConfig || null;
+};
+
 /**
- * Calculate tipouts for a shift based on role configurations
+ * Calculate tipouts for a shift based on ACTIVE role configurations for the shift's date
  * 
  * @param shift The shift to calculate tipouts for
  * @param hasHost Whether hosts worked that day (affects host tipouts)
@@ -40,7 +71,7 @@ type Shift = {
  * @param hasBar Whether bartenders worked that day (affects bar tipouts)
  * @returns Object containing calculated tipout amounts
  */
-export const calculateTipouts = (shift: Shift, hasHost: boolean, hasSA: boolean, hasBar: boolean = false) => {
+export const calculateTipouts = (shift: Shift, hasHost: boolean, hasSA: boolean, hasBar: boolean = false): { barTipout: number, hostTipout: number, saTipout: number } => {
   if (!shift.role?.configs) return { barTipout: 0, hostTipout: 0, saTipout: 0 };
 
   console.log('calculateTipouts input:', { 
@@ -57,48 +88,28 @@ export const calculateTipouts = (shift: Shift, hasHost: boolean, hasSA: boolean,
   let hostTipout = 0;
   let saTipout = 0;
 
-  // Find the applicable configurations for this shift
-  shift.role.configs.forEach(config => {
-    // Only apply tipout if this role is configured to pay this type of tipout
-    const paysTipout = config.paysTipout !== false; // default to true if not specified
-    console.log('Config:', { 
-      type: config.tipoutType, 
-      rate: config.percentageRate, 
-      paysTipout,
-      totalTips,
-      liquorSales: shift.liquorSales,
-      would_apply_host: hasHost && config.tipoutType === 'host',
-      would_apply_sa: hasSA && config.tipoutType === 'sa',
-      would_apply_bar: hasBar && config.tipoutType === 'bar'
-    });
+  // Find ACTIVE config for each tipout type
+  const activeBarConfig = findActiveConfig(shift, 'bar');
+  const activeHostConfig = findActiveConfig(shift, 'host');
+  const activeSaConfig = findActiveConfig(shift, 'sa');
 
-    if (!paysTipout) return;
+  // Calculate Bar Tipout
+  if (hasBar && activeBarConfig && activeBarConfig.paysTipout !== false) {
+    barTipout = Number(shift.liquorSales) * (activeBarConfig.percentageRate / 100);
+    console.log(`Calculated bar tipout: ${barTipout} using rate ${activeBarConfig.percentageRate}%`);
+  }
 
-    switch (config.tipoutType) {
-      case 'bar':
-        // Bar tipout is calculated based on liquor sales
-        // Only calculate if there are bartenders to receive the tipout
-        if (hasBar) {
-          barTipout = Number(shift.liquorSales) * (config.percentageRate / 100);
-          console.log('Calculated bar tipout:', barTipout);
-        }
-        break;
-      case 'host':
-        if (hasHost) {
-          // Host tipout is calculated based on total tips
-          hostTipout = totalTips * (config.percentageRate / 100);
-          console.log('Calculated host tipout:', hostTipout);
-        }
-        break;
-      case 'sa':
-        if (hasSA) {
-          // SA tipout is calculated based on total tips
-          saTipout = totalTips * (config.percentageRate / 100);
-          console.log('Calculated SA tipout:', saTipout);
-        }
-        break;
-    }
-  });
+  // Calculate Host Tipout
+  if (hasHost && activeHostConfig && activeHostConfig.paysTipout !== false) {
+    hostTipout = totalTips * (activeHostConfig.percentageRate / 100);
+    console.log(`Calculated host tipout: ${hostTipout} using rate ${activeHostConfig.percentageRate}%`);
+  }
+
+  // Calculate SA Tipout
+  if (hasSA && activeSaConfig && activeSaConfig.paysTipout !== false) {
+    saTipout = totalTips * (activeSaConfig.percentageRate / 100);
+    console.log(`Calculated SA tipout: ${saTipout} using rate ${activeSaConfig.percentageRate}%`);
+  }
 
   const result = { barTipout, hostTipout, saTipout };
   console.log('Final tipout calculation:', result);
@@ -106,35 +117,29 @@ export const calculateTipouts = (shift: Shift, hasHost: boolean, hasSA: boolean,
 };
 
 /**
- * Helper function to check if a role receives a specific tipout type
+ * Helper function to check if a role receives a specific tipout type based on ACTIVE config
  */
 export const roleReceivesTipoutType = (shift: Shift, tipoutType: string): boolean => {
-  if (!shift.role?.configs) return false;
-  
-  return shift.role.configs.some(config => 
-    config.tipoutType === tipoutType && config.receivesTipout
-  );
+  const activeConfig = findActiveConfig(shift, tipoutType);
+  return !!activeConfig && !!activeConfig.receivesTipout;
 };
 
 /**
- * Helper function to check if a role pays a specific tipout type
+ * Helper function to check if a role pays a specific tipout type based on ACTIVE config
  */
 export const rolePaysTipoutType = (shift: Shift, tipoutType: string): boolean => {
-  if (!shift.role?.configs) return false;
-  
-  return shift.role.configs.some(config => 
-    config.tipoutType === tipoutType && config.paysTipout !== false
-  );
+  const activeConfig = findActiveConfig(shift, tipoutType);
+  // Default paysTipout to true if undefined or null, explicitly check for false
+  return !!activeConfig && activeConfig.paysTipout !== false;
 };
 
 /**
- * Helper function to get a role's distribution group for a tipout type
+ * Helper function to get a role's distribution group for a tipout type based on ACTIVE config
  */
 export const getRoleDistributionGroup = (shift: Shift, tipoutType: string): string | null => {
-  if (!shift.role?.configs) return null;
-  
-  const config = shift.role.configs.find(c => 
-    c.tipoutType === tipoutType && c.receivesTipout && c.distributionGroup
-  );
-  return config?.distributionGroup || null;
+  const activeConfig = findActiveConfig(shift, tipoutType);
+  if (activeConfig && activeConfig.receivesTipout && activeConfig.distributionGroup) {
+    return activeConfig.distributionGroup;
+  }
+  return null;
 }; 

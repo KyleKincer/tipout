@@ -1,3 +1,4 @@
+import { describe, it, expect } from '@jest/globals';
 import { calculateTipouts, roleReceivesTipoutType, rolePaysTipoutType, getRoleDistributionGroup } from './tipoutCalculations';
 // We need to import the types. Adjust the path if they are defined elsewhere or re-define them here.
 // Assuming types might be in a central types file or directly in tipoutCalculations.ts and exported.
@@ -133,6 +134,19 @@ describe('calculateTipouts', () => {
 
         expect(calculateTipouts(shift, true, true, true)).toEqual({ barTipout: 0, hostTipout: 0, saTipout: 0 });
     });
+
+    it('should calculate bar tipout based on individual liquor sales after pooling', () => {
+        const configs: RoleConfig[] = [
+            { id: 'cfg1', tipoutType: 'bar', percentageRate: 10, effectiveFrom: '2023-01-01', effectiveTo: null, paysTipout: true },
+            { id: 'cfg2', tipoutType: 'host', percentageRate: 7, effectiveFrom: '2023-01-01', effectiveTo: null, paysTipout: true },
+            { id: 'cfg3', tipoutType: 'sa', percentageRate: 4, effectiveFrom: '2023-01-01', effectiveTo: null, paysTipout: true },
+        ];
+        const shift = createMockShift({ roleConfigs: configs, cashTips: 50, creditTips: 150, liquorSales: 400 });
+
+        // Bar tipout is calculated based on individual liquor sales after pooling
+        // 10% of 400 liquor sales = 40
+        expect(calculateTipouts(shift, true, true, true)).toEqual({ barTipout: 40, hostTipout: 14, saTipout: 8 });
+    });
 });
 
 
@@ -259,4 +273,76 @@ describe('getRoleDistributionGroup', () => {
         expect(getRoleDistributionGroup(shiftNoRole, 'bar')).toBe(null);
         expect(getRoleDistributionGroup(shiftNullConfigs, 'bar')).toBe(null);
     });
+});
+
+// --- findActiveConfig Tests (via calculateTipouts) ---
+
+describe('findActiveConfig', () => {
+    // Need access to the non-exported findActiveConfig.
+    // We can test it indirectly via the exported functions, 
+    // or make it exportable for testing, or copy its logic here.
+    // For simplicity here, let's assume we test its *effect* via calculateTipouts.
+    
+    const createDatedMockShift = (date: string, configs: RoleConfig[]): Shift => ({
+        id: 'datedShift',
+        date: date, // YYYY-MM-DD
+        hours: 8,
+        cashTips: 100,
+        creditTips: 200,
+        liquorSales: 500,
+        role: {
+            id: 'role1',
+            name: 'Server',
+            basePayRate: 10,
+            configs: configs,
+        },
+    });
+
+    it('should use config active on the shift date', () => {
+        const configs: RoleConfig[] = [
+            { id: 'cfg1', tipoutType: 'host', percentageRate: 1, effectiveFrom: '2024-01-01', effectiveTo: '2024-01-31', paysTipout: true },
+            { id: 'cfg2', tipoutType: 'host', percentageRate: 2, effectiveFrom: '2024-02-01', effectiveTo: null, paysTipout: true }, // Active in Feb
+        ];
+        const shiftJan = createDatedMockShift('2024-01-15', configs);
+        const shiftFeb = createDatedMockShift('2024-02-15', configs);
+
+        // Jan shift uses 1% -> hostTipout = (100+200) * 0.01 = 3
+        expect(calculateTipouts(shiftJan, true, false, false).hostTipout).toBeCloseTo(3);
+        // Feb shift uses 2% -> hostTipout = (100+200) * 0.02 = 6
+        expect(calculateTipouts(shiftFeb, true, false, false).hostTipout).toBeCloseTo(6);
+    });
+
+    it('should handle effectiveTo date correctly', () => {
+         const configs: RoleConfig[] = [
+            { id: 'cfg1', tipoutType: 'host', percentageRate: 1, effectiveFrom: '2024-01-01', effectiveTo: '2024-01-15', paysTipout: true }, // Active until Jan 15th inclusive
+        ];
+        const shiftOnEnd = createDatedMockShift('2024-01-15', configs);
+        const shiftAfterEnd = createDatedMockShift('2024-01-16', configs);
+
+        // Shift on end date uses the config
+        expect(calculateTipouts(shiftOnEnd, true, false, false).hostTipout).toBeCloseTo(3);
+         // Shift after end date does not use the config
+        expect(calculateTipouts(shiftAfterEnd, true, false, false).hostTipout).toBeCloseTo(0);
+    });
+
+     it('should handle effectiveFrom date correctly', () => {
+        const configs: RoleConfig[] = [
+            { id: 'cfg1', tipoutType: 'host', percentageRate: 1, effectiveFrom: '2024-01-15', effectiveTo: null, paysTipout: true }, // Active from Jan 15th inclusive
+        ];
+        const shiftOnStart = createDatedMockShift('2024-01-15', configs);
+        const shiftBeforeStart = createDatedMockShift('2024-01-14', configs);
+
+        // Shift on start date uses the config
+        expect(calculateTipouts(shiftOnStart, true, false, false).hostTipout).toBeCloseTo(3);
+        // Shift before start date does not use the config
+        expect(calculateTipouts(shiftBeforeStart, true, false, false).hostTipout).toBeCloseTo(0);
+     });
+
+     it('should return null if no config is active for the date', () => {
+         const configs: RoleConfig[] = [
+            { id: 'cfg1', tipoutType: 'host', percentageRate: 1, effectiveFrom: '2024-02-01', effectiveTo: null, paysTipout: true }, // Only active from Feb
+        ];
+        const shiftJan = createDatedMockShift('2024-01-15', configs);
+        expect(calculateTipouts(shiftJan, true, false, false).hostTipout).toBeCloseTo(0);
+     });
 }); 

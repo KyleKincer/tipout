@@ -17,7 +17,8 @@ export type RoleConfig = {
   effectiveTo: string | null;
   receivesTipout?: boolean;  // Whether this role receives tipout of this type
   paysTipout?: boolean;      // Whether this role pays tipout of this type
-  distributionGroup?: string; // For pooling tipouts (e.g., 'bartenders', 'hosts')
+  distributionGroup?: string; // For pooling tipouts RECEIVED FROM others (e.g., 'bartenders', 'hosts')
+  tipPoolGroup?: string;     // For pooling tips COLLECTED BY this role WITH others (e.g. "server_pool", "bartender_pool")
 };
 
 /**
@@ -36,6 +37,7 @@ export type Shift = {
   cashTips: number;
   creditTips: number;
   liquorSales: number;
+  configs?: RoleConfig[]; // Add optional configs property
 };
 
 /**
@@ -69,7 +71,12 @@ export type EmployeeRoleSummary = {
   totalHours: number;
   totalCashTips: number;
   totalCreditTips: number;
-  totalBarTipout: number;   // Net amount for this employee/role: +received / -paid
+  totalGrossCreditTips: number; // Gross credit tips before pooling
+  /**
+   * Net amount for this employee/role: Positive=Received, Negative=Paid.
+   * For pooled roles, this is now (received from pool - paid to pool), so can be negative or positive.
+   */
+  totalBarTipout: number;
   totalHostTipout: number;  // Net amount for this employee/role: +received / -paid
   totalSaTipout: number;    // Net amount for this employee/role: +received / -paid
   cashTipsPerHour: number;
@@ -79,6 +86,7 @@ export type EmployeeRoleSummary = {
   totalPayrollTips: number;  // Represents the value used for payroll (CreditTips + Net Tipouts)
   totalLiquorSales: number;
   payrollTotal: number;      // Calculated total payroll amount (Base Pay + Payroll Tips)
+  tipPoolGroup?: string | null; // Name of the tip pool group, if any
 };
 
 /**

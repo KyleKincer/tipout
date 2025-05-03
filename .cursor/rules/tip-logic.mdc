@@ -1,0 +1,48 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Tip Calculation & Distribution Logic
+
+This rule summarizes the core logic for tip calculation, pooling, and distribution in the system. It is intended to help developers understand and navigate the main files and types involved in tipouts and payroll tip calculations.
+
+## Main Implementation Files
+- [reportCalculations.ts](mdc:src/utils/reportCalculations.ts): Implements the main daily tip pooling, distribution, and summary logic.
+- [tipoutCalculations.ts](mdc:src/utils/tipoutCalculations.ts): Contains the core functions for calculating tipouts per shift and helpers for role config logic.
+- [reports.ts](mdc:src/types/reports.ts): Defines the main types used throughout the tip logic, including `Shift`, `RoleConfig`, `EmployeeRoleSummary`, and `ReportSummary`.
+
+## Core Logic Overview
+
+### 1. Daily Presence Check
+- For each day, determine if Host, SA, or Bar roles worked. This affects whether certain tipouts are paid.
+
+### 2. Tip Pooling (`tipPoolGroup`)
+- Shifts with the same non-null `tipPoolGroup` in their active `RoleConfig` are pooled together for that day.
+- The pool's total original cash/credit tips and hours are summed.
+- The pool's total tipouts (Bar, Host, SA) are calculated and subtracted from the pool's total credit tips.
+- Net pool rates (cash and credit) are calculated per hour, and each member's share is based on their hours.
+
+### 3. Distribution Pools
+- For each tipout type (Bar, Host, SA), calculate the total amount paid into the pool by all shifts for the day.
+
+### 4. Distribution Receiving
+- For each shift, if its role config has `receivesTipout: true`, it receives a share of the corresponding distribution pool proportional to its hours within its `distributionGroup`.
+
+### 5. Payroll Tips Calculation
+- **Non-Pooled Roles:** Payroll tips = Original Credit Tips + Net Received Tipouts - Net Paid Tipouts.
+- **Pooled Roles:** Payroll tips = Net pooled credit share + all received tipouts from distribution pools.
+
+### 6. Final Summary
+- Aggregates all processed shift data into `EmployeeRoleSummary` objects, including total hours, net tips, gross tips, tipouts, and payroll totals.
+
+## Key Types & Fields
+- `RoleConfig.tipPoolGroup`: Groups roles for pooling collected tips.
+- `RoleConfig.distributionGroup`: Groups roles for receiving distributed tipouts.
+- `RoleConfig.paysTipout`: Determines if a role contributes to a distribution pool.
+- `RoleConfig.receivesTipout`: Determines if a role receives from a distribution pool.
+- `EmployeeRoleSummary`: Stores all per-employee/role summary data for payroll and reporting.
+
+---
+
+For detailed implementation, see [reportCalculations.ts](mdc:src/utils/reportCalculations.ts) and [tipoutCalculations.ts](mdc:src/utils/tipoutCalculations.ts). Type definitions are in [reports.ts](mdc:src/types/reports.ts).

@@ -74,6 +74,7 @@ function ReportsContent() {
     }
   });
   const [groupByEmployee, setGroupByEmployee] = useState(true)
+  const [showPoolSummaries, setShowPoolSummaries] = useState(false)
 
   // Update filters when search params change (e.g., back/forward navigation)
   useEffect(() => {
@@ -179,6 +180,7 @@ function ReportsContent() {
           totalHours: 0,
           totalCashTips: 0,
           totalCreditTips: 0,
+          totalGrossCreditTips: 0,
           totalBarTipout: 0,
           totalHostTipout: 0,
           totalSaTipout: 0,
@@ -194,15 +196,15 @@ function ReportsContent() {
           agg.totalHours += summary.totalHours
           agg.totalCashTips += summary.totalCashTips
           agg.totalCreditTips += summary.totalCreditTips
-          agg.totalBarTipout += summary.totalBarTipout // Summing net amounts
-          agg.totalHostTipout += summary.totalHostTipout // Summing net amounts
-          agg.totalSaTipout += summary.totalSaTipout   // Summing net amounts
+          agg.totalGrossCreditTips += summary.totalGrossCreditTips
+          agg.totalBarTipout += summary.totalBarTipout
+          agg.totalHostTipout += summary.totalHostTipout
+          agg.totalSaTipout += summary.totalSaTipout
           agg.totalLiquorSales += summary.totalLiquorSales
-          agg.basePayRate += summary.basePayRate * summary.totalHours // for weighted avg
+          agg.basePayRate += summary.basePayRate * summary.totalHours
           agg.totalPayrollTips = (agg.totalPayrollTips || 0) + (summary.totalPayrollTips || 0)
           agg.payrollTotal = (agg.payrollTotal || 0) + (summary.payrollTotal || 0)
         }
-        // Re-calculate per-hour rates based on aggregated values
         agg.cashTipsPerHour = agg.totalHours > 0 ? agg.totalCashTips / agg.totalHours : 0;
         agg.creditTipsPerHour = agg.totalHours > 0 ? (agg.totalPayrollTips ?? 0) / agg.totalHours : 0;
         agg.totalTipsPerHour = agg.totalHours > 0
@@ -833,6 +835,19 @@ function ReportsContent() {
   // Sorting logic remains the same
   displayedEmployeeSummaries = displayedEmployeeSummaries.slice().sort((a, b) => a.employeeName.localeCompare(b.employeeName))
 
+  // Option B: compute per-pool aggregates
+  const poolSummaries: [string, { totalHours: number; totalGrossCreditTips: number; totalNetCreditShare: number }][] = Object.entries(
+    displayedEmployeeSummaries.reduce((acc, s) => {
+      if (s.tipPoolGroup) {
+        if (!acc[s.tipPoolGroup]) acc[s.tipPoolGroup] = { totalHours: 0, totalGrossCreditTips: 0, totalNetCreditShare: 0 };
+        acc[s.tipPoolGroup].totalHours += s.totalHours;
+        acc[s.tipPoolGroup].totalGrossCreditTips += s.totalGrossCreditTips;
+        acc[s.tipPoolGroup].totalNetCreditShare += s.totalCreditTips;
+      }
+      return acc;
+    }, {} as Record<string, { totalHours: number; totalGrossCreditTips: number; totalNetCreditShare: number }>)
+  );
+
   return (
     <div className="px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
       {/* ... Page Title ... */}
@@ -1083,6 +1098,36 @@ function ReportsContent() {
                 {groupByEmployee ? 'All roles and payroll are summed for each employee.' : 'Each row is a unique employee/role combination.'}
               </span>
             </div>
+            {/* Option B: Tip Pool Summaries */}
+            <div className="mb-6">
+              <div className="flex justify-between items-center">
+                <h3 className="text-lg font-medium text-[var(--foreground)]">Tip Pool Summaries</h3>
+                <button
+                  type="button"
+                  onClick={() => setShowPoolSummaries(v => !v)}
+                  className="text-sm text-indigo-600 hover:underline"
+                >
+                  {showPoolSummaries ? 'Hide' : 'Show'}
+                </button>
+              </div>
+              {showPoolSummaries && poolSummaries.length > 0 && (
+                <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {poolSummaries.map(([group, { totalHours, totalGrossCreditTips, totalNetCreditShare }]) => (
+                    <div key={group} className="p-4 bg-white/50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
+                      <div className="flex justify-between font-medium">
+                        <span>{group}</span><span>{totalHours.toFixed(2)} hrs</span>
+                      </div>
+                      <div className="mt-2 flex justify-between text-sm">
+                        <span>Gross Credit Tips</span><span>${totalGrossCreditTips.toFixed(2)}</span>
+                      </div>
+                      <div className="mt-1 flex justify-between text-sm">
+                        <span>Net Credit Share</span><span>${totalNetCreditShare.toFixed(2)}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
             {/* Mobile card view */}
             <div className="block md:hidden space-y-4">
               {displayedEmployeeSummaries.map((summary) => (
@@ -1104,7 +1149,7 @@ function ReportsContent() {
                     <div className="flex-grow">
                       <h3 className="text-base font-medium text-[var(--foreground)]">{summary.employeeName}</h3>
                       <p className="text-sm text-gray-500 dark:text-gray-400">{groupByEmployee ? 'All Roles' : summary.roleName}</p>
-                    </div>
+                      </div>
                     <div className="text-right">
                       <p className="text-sm font-medium text-green-600 dark:text-green-400">
                         ${(summary.totalTipsPerHour + summary.basePayRate).toFixed(2)}/hr
@@ -1112,14 +1157,20 @@ function ReportsContent() {
                       <p className="text-xs text-gray-500 dark:text-gray-400">
                         {summary.totalHours.toFixed(2)} hours
                       </p>
-                    </div>
+                      </div>
                   </div>
                   {/* Tips Section */}
-                  <div className="grid grid-cols-3 gap-4 mb-4">
+                  <div className="grid grid-cols-4 gap-4 mb-4">
                     <div>
                       <p className="text-xs text-gray-500 dark:text-gray-400">cash tips</p>
                       <p className="text-sm font-medium text-[var(--foreground)]">
                         ${summary.totalCashTips.toFixed(2)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">gross credit tips</p>
+                      <p className="text-sm font-medium text-[var(--foreground)]">
+                        ${summary.totalGrossCreditTips.toFixed(2)}
                       </p>
                     </div>
                     <div>
@@ -1205,10 +1256,10 @@ function ReportsContent() {
                         </p>
                       </div>
                     </div>
-                  </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
             {/* Desktop table view */}
             <div className="hidden md:block overflow-hidden bg-white/50 dark:bg-gray-800/50 shadow sm:rounded-lg border border-gray-200 dark:border-gray-700">
               <div className="overflow-x-auto">
@@ -1219,7 +1270,6 @@ function ReportsContent() {
                         <th scope="col" className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 dark:text-white sm:pl-6">
                           employee
                         </th>
-                        {/* Only show role column if not grouping by employee */}
                         {!groupByEmployee && (
                           <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
                             role
@@ -1230,6 +1280,9 @@ function ReportsContent() {
                         </th>
                         <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
                           cash tips
+                        </th>
+                        <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
+                          gross credit tips
                         </th>
                         <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
                           credit tips
@@ -1293,7 +1346,6 @@ function ReportsContent() {
                           <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-[var(--foreground)] sm:pl-6">
                             {summary.employeeName}
                           </td>
-                          {/* Only show role cell if not grouping by employee */}
                           {!groupByEmployee && (
                             <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
                               {summary.roleName}
@@ -1304,6 +1356,9 @@ function ReportsContent() {
                           </td>
                           <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
                             ${summary.totalCashTips.toFixed(2)}
+                          </td>
+                          <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
+                            ${summary.totalGrossCreditTips.toFixed(2)}
                           </td>
                           <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
                             ${summary.totalCreditTips.toFixed(2)}
@@ -1365,7 +1420,7 @@ function ReportsContent() {
                       ))}
                     </tbody>
                   </table>
-                </div>
+            </div>
               </div>
             </div>
           </div>

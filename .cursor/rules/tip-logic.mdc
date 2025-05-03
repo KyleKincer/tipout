@@ -20,8 +20,8 @@ This rule summarizes the core logic for tip calculation, pooling, and distributi
 ### 2. Tip Pooling (`tipPoolGroup`)
 - Shifts with the same non-null `tipPoolGroup` in their active `RoleConfig` are pooled together for that day.
 - The pool's total original cash/credit tips and hours are summed.
-- The pool's total tipouts (Bar, Host, SA) are calculated and subtracted from the pool's total credit tips.
-- Net pool rates (cash and credit) are calculated per hour, and each member's share is based on their hours.
+- The pool's total tipouts for Host and SA are calculated and subtracted from the pool's total credit tips before distribution.
+- **Bar tipout is NOT subtracted at the pool level.**
 
 ### 3. Distribution Pools
 - For each tipout type (Bar, Host, SA), calculate the total amount paid into the pool by all shifts for the day.
@@ -46,3 +46,27 @@ This rule summarizes the core logic for tip calculation, pooling, and distributi
 ---
 
 For detailed implementation, see [reportCalculations.ts](mdc:src/utils/reportCalculations.ts) and [tipoutCalculations.ts](mdc:src/utils/tipoutCalculations.ts). Type definitions are in [reports.ts](mdc:src/types/reports.ts).
+
+# Tipout Calculation Logic
+
+- **Tip Pooling:**
+  - Shifts with the same non-null `tipPoolGroup` in their active `RoleConfig` are pooled together for that day.
+  - The pool's total original cash/credit tips and hours are summed.
+  - The pool's total tipouts for Host and SA are calculated and subtracted from the pool's total credit tips before distribution.
+  - **Bar tipout is NOT subtracted at the pool level.**
+
+- **Distribution:**
+  - After Host and SA tipouts are deducted, the remaining pooled tips are distributed to individuals based on hours worked.
+
+- **Bar Tipout:**
+  - After tips are pooled and distributed, each individual pays their own bar tipout based on their own liquor sales and the bar tipout rate.
+  - This means the bar tipout is calculated and deducted at the individual level, after pooling, not at the pool/group level.
+
+- **Payroll Tips:**
+  - For pooled roles: `payrollTips = net pooled credit share + received distribution tipouts - bar tipout paid by individual`
+  - For non-pooled roles: `payrollTips = original credit tips + net tipouts received/paid`
+
+- **Relevant Implementation:**
+  - See [reportCalculations.ts](mdc:src/utils/reportCalculations.ts) for the main logic.
+  - See [tipoutCalculations.ts](mdc:src/utils/tipoutCalculations.ts) for tipout calculation helpers.
+  - See [reportCalculations.test.ts](mdc:src/utils/reportCalculations.test.ts) and [tipoutCalculations.test.ts](mdc:src/utils/tipoutCalculations.test.ts) for test cases verifying this behavior.

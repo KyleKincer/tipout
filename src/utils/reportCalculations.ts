@@ -375,18 +375,17 @@ export const calculateEmployeeRoleSummariesDaily = (shiftsToProcess: Shift[]): E
       if (isInPool) {
         // Pooled shifts already have NET tips assigned (shift.creditTips reflects net pool share).
         // Their contribution to distribution pools was handled at the pool level.
-        // Instead of always zero, show negative if paid bar tipout (contributed to pool), positive if received (bar role).
-        const { barTipout } = calculateTipouts(shift, dailyHasHost, dailyHasSA, dailyHasBar);
+        // Instead of always zero, show negative if paid tipout (contributed to pool), positive if received (role).
+        const { barTipout, hostTipout, saTipout } = calculateTipouts(shift, dailyHasHost, dailyHasSA, dailyHasBar);
         const paidBar = rolePaysTipoutType(shift, 'bar') ? barTipout : 0;
-        // Calculate receivedBar as above
-        // If this shift is a bar role (receives from pool), receivedBar is set above
-        // If this shift is a pooled role that pays bar tipout, paidBar is set above
-        // Show netBarTipout as receivedBar - paidBar (can be negative or positive)
+        const paidHost = rolePaysTipoutType(shift, 'host') ? hostTipout : 0;
+        const paidSA = rolePaysTipoutType(shift, 'sa') ? saTipout : 0;
+        // Show net tipouts as received - paid (can be negative or positive)
         netBarTipout = receivedBar - paidBar;
-        netHostTipout = receivedHost; // For now, only bar tipout is pooled after pooling, host/sa are pre-pool
-        netSaTipout = receivedSA;
-        // Payroll Tips for pooled roles = Net Pooled Credit Share + Received Distribution Tipouts - Bar Tipout
-        payrollTips = shift.creditTips + receivedBar + receivedHost + receivedSA - paidBar;
+        netHostTipout = receivedHost - paidHost;
+        netSaTipout = receivedSA - paidSA;
+        // Payroll Tips for pooled roles = Net Pooled Credit Share + Received Distribution Tipouts - All Paid Tipouts
+        payrollTips = shift.creditTips + receivedBar + receivedHost + receivedSA - paidBar - paidHost - paidSA;
       } else {
         // NON-POOLED shifts: Calculate tipouts paid and received individually.
         const shiftWithOriginalTips = {

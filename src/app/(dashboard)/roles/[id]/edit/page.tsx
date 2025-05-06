@@ -13,6 +13,7 @@ type RoleConfig = {
   receivesTipout: boolean
   paysTipout: boolean
   distributionGroup: string | null
+  tipPoolGroup?: string | null
 }
 
 export default function EditRolePage() {
@@ -26,6 +27,7 @@ export default function EditRolePage() {
   const [configs, setConfigs] = useState<RoleConfig[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [existingPoolGroups, setExistingPoolGroups] = useState<string[]>([])
   
   const tipoutTypes = ['bar', 'host', 'sa']
   const distributionGroups = ['bartenders', 'hosts', 'servers', 'support']
@@ -65,7 +67,8 @@ export default function EditRolePage() {
         ...config,
         percentageRate: Number(config.percentageRate),
         effectiveFrom: new Date(config.effectiveFrom).toISOString().split('T')[0],
-        effectiveTo: config.effectiveTo ? new Date(config.effectiveTo).toISOString().split('T')[0] : null
+        effectiveTo: config.effectiveTo ? new Date(config.effectiveTo).toISOString().split('T')[0] : null,
+        tipPoolGroup: config.tipPoolGroup || null
       })))
     } catch (err) {
       console.error('Error fetching configs:', err)
@@ -74,6 +77,20 @@ export default function EditRolePage() {
       setLoading(false)
     }
   }, [params.id])
+
+  const fetchExistingPoolGroups = useCallback(async () => {
+    try {
+      const response = await fetch('/api/tip-pool-groups');
+      if (!response.ok) {
+        throw new Error('Failed to fetch existing pool groups');
+      }
+      const data = await response.json();
+      setExistingPoolGroups(data);
+    } catch (err) {
+      console.error('Error fetching pool groups:', err);
+      // Non-critical error, maybe just log it
+    }
+  }, [])
 
   useEffect(() => {
     if (params.id === 'new') {
@@ -85,7 +102,8 @@ export default function EditRolePage() {
     // Fetch existing role
     fetchRole()
     fetchConfigs()
-  }, [params.id, fetchRole, fetchConfigs])
+    fetchExistingPoolGroups()
+  }, [params.id, fetchRole, fetchConfigs, fetchExistingPoolGroups])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -424,6 +442,55 @@ export default function EditRolePage() {
                       </div>
                     )
                   })}
+                </div>
+              </div>
+
+              {/* Tip Pool Group Configuration */}
+              <div className="mt-6 p-4 bg-white/50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
+                <h4 className="text-md font-medium text-gray-900 dark:text-white">Tip Pooling</h4>
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                  Optionally assign this role to a tip pool group (e.g., "servers", "bartenders"). Roles within the same group on the same day will have their tips pooled and distributed based on hours worked.
+                  Leave blank if this role's tips should not be pooled.
+                </p>
+
+                <div className="mt-4">
+                  <label htmlFor="tipPoolGroupInput" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Tip Pool Group Name
+                  </label>
+                  <div className="mt-1">
+                    <input
+                      type="text"
+                      id="tipPoolGroupInput"
+                      list="pool-groups-list"
+                      placeholder="Select existing or type new..." 
+                      value={configs.find(c => c.tipPoolGroup)?.tipPoolGroup || ''}
+                      onChange={(e) => {
+                        const poolName = e.target.value.trim() ? e.target.value.trim() : null;
+                        const updatedConfigs = configs.map(c => ({ ...c, tipPoolGroup: poolName }));
+                        if (updatedConfigs.length === 0 && poolName !== null) {
+                           setConfigs([{ 
+                             tipoutType: '', percentageRate: 0,
+                             effectiveFrom: new Date().toISOString().split('T')[0], effectiveTo: null,
+                             receivesTipout: false, paysTipout: false, distributionGroup: null,
+                             tipPoolGroup: poolName
+                           }]);
+                         } else if (configs.length > 0) {
+                           setConfigs(updatedConfigs);
+                         } else {
+                             setConfigs([]);
+                         }
+                      }}
+                      className="block w-full sm:w-1/2 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white px-3 py-2"
+                    />
+                    <datalist id="pool-groups-list">
+                      {existingPoolGroups.map(group => (
+                        <option key={group} value={group} />
+                      ))}
+                    </datalist>
+                  </div>
+                   <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                     Start typing to see existing groups or enter a new name. Leave blank for no pooling.
+                   </p>
                 </div>
               </div>
 

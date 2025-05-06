@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { RoleConfig as FrontendRoleConfig } from '@/types/reports'
 
 export async function GET(
   request: Request,
@@ -38,7 +39,7 @@ export async function PUT(
     
     // Create new configs
     const configs = await Promise.all(
-      data.map((config: any) => 
+      data.map((config: FrontendRoleConfig) => 
         prisma.roleConfig.create({
           data: {
             roleId: id,
@@ -48,7 +49,8 @@ export async function PUT(
             effectiveTo: config.effectiveTo ? new Date(config.effectiveTo) : null,
             receivesTipout: config.receivesTipout,
             paysTipout: config.paysTipout,
-            distributionGroup: config.distributionGroup
+            distributionGroup: config.distributionGroup,
+            tipPoolGroup: config.tipPoolGroup
           }
         })
       )

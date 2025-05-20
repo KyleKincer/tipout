@@ -63,22 +63,21 @@ export async function GET(request: Request) {
         employee: true,
         role: {
           include: {
-            configs: {
-              where: {
-                OR: [
-                  { effectiveTo: null },
-                  {
-                    AND: [
-                      { effectiveFrom: { lte: getEndOfDay(endDate || startDate || new Date().toISOString().split('T')[0]) } },
-                      {
-                        OR: [
-                          { effectiveTo: { gte: parseDate(startDate || new Date().toISOString().split('T')[0]) } },
-                          { effectiveTo: null }
-                        ]
-                      }
-                    ]
-                  }
-                ]
+            configs: { // Fetch all configs for the role to determine the active one based on shift date
+              orderBy: {
+                effectiveFrom: 'desc' 
+              },
+              select: { // Ensure all necessary fields are selected
+                id: true,
+                tipoutType: true,
+                percentageRate: true,
+                effectiveFrom: true,
+                effectiveTo: true,
+                paysTipout: true,
+                receivesTipout: true,
+                distributionGroup: true,
+                tipPoolGroup: true,
+                basePayRate: true, // Crucial: ensure basePayRate is fetched
               }
             }
           }
@@ -90,21 +89,44 @@ export async function GET(request: Request) {
     })
 
     // Convert Decimal values to numbers for JSON serialization
-    const serializedShifts = shifts.map(shift => ({
-      ...shift,
-      hours: Number(shift.hours),
-      cashTips: Number(shift.cashTips),
-      creditTips: Number(shift.creditTips),
-      liquorSales: Number(shift.liquorSales),
-      role: {
-        ...shift.role,
-        basePayRate: Number(shift.role.basePayRate),
-        configs: shift.role.configs.map(config => ({
-          ...config,
-          percentageRate: Number(config.percentageRate)
-        }))
+    const serializedShifts = shifts.map(shift => {
+      const shiftDate = new Date(shift.date);
+      let currentBasePayRate = 0;
+      if (shift.role && shift.role.configs && shift.role.configs.length > 0) {
+        // Already sorted by effectiveFrom: 'desc' in the query
+        const activeConfig = shift.role.configs.find(config => {
+            const effectiveFrom = new Date(config.effectiveFrom);
+            const isAfterOrOnFrom = shiftDate >= effectiveFrom;
+            if (!isAfterOrOnFrom) return false;
+            if (config.effectiveTo) {
+                const effectiveTo = new Date(config.effectiveTo);
+                return shiftDate <= effectiveTo;
+            }
+            return true; // No effectiveTo means active indefinitely from effectiveFrom
+        });
+        if (activeConfig && activeConfig.basePayRate !== null) { // check for null
+            currentBasePayRate = Number(activeConfig.basePayRate);
+        }
       }
-    }))
+
+      return {
+        ...shift,
+        hours: Number(shift.hours),
+        cashTips: Number(shift.cashTips),
+        creditTips: Number(shift.creditTips),
+        liquorSales: Number(shift.liquorSales),
+        role: shift.role ? {
+          id: shift.role.id,
+          name: shift.role.name,
+          basePayRate: currentBasePayRate, // Active base pay rate for the shift's date
+          configs: shift.role.configs.map(config => ({
+            ...config,
+            percentageRate: Number(config.percentageRate),
+            basePayRate: config.basePayRate !== null ? Number(config.basePayRate) : 0 // Ensure individual configs also serialize it
+          }))
+        } : undefined,
+      };
+    })
 
     return NextResponse.json(serializedShifts)
   } catch (error) {
@@ -152,22 +174,21 @@ export async function POST(request: Request) {
         employee: true,
         role: {
           include: {
-            configs: {
-              where: {
-                OR: [
-                  { effectiveTo: null },
-                  {
-                    AND: [
-                      { effectiveFrom: { lte: getEndOfDay(date) } },
-                      {
-                        OR: [
-                          { effectiveTo: { gte: parseDate(date) } },
-                          { effectiveTo: null }
-                        ]
-                      }
-                    ]
-                  }
-                ]
+            configs: { // Fetch all configs for the role
+              orderBy: {
+                effectiveFrom: 'desc'
+              },
+              select: { // Ensure all necessary fields are selected
+                id: true,
+                tipoutType: true,
+                percentageRate: true,
+                effectiveFrom: true,
+                effectiveTo: true,
+                paysTipout: true,
+                receivesTipout: true,
+                distributionGroup: true,
+                tipPoolGroup: true,
+                basePayRate: true, // Crucial: ensure basePayRate is fetched
               }
             }
           }
@@ -176,20 +197,41 @@ export async function POST(request: Request) {
     })
 
     // Convert Decimal values to numbers for JSON serialization
+    const shiftDate = new Date(shift.date);
+    let currentBasePayRate = 0;
+    if (shift.role && shift.role.configs && shift.role.configs.length > 0) {
+      // Already sorted by effectiveFrom: 'desc' in the query
+      const activeConfig = shift.role.configs.find(config => {
+          const effectiveFrom = new Date(config.effectiveFrom);
+          const isAfterOrOnFrom = shiftDate >= effectiveFrom;
+          if (!isAfterOrOnFrom) return false;
+          if (config.effectiveTo) {
+              const effectiveTo = new Date(config.effectiveTo);
+              return shiftDate <= effectiveTo;
+          }
+          return true; // No effectiveTo means active indefinitely from effectiveFrom
+      });
+      if (activeConfig && activeConfig.basePayRate !== null) {
+          currentBasePayRate = Number(activeConfig.basePayRate);
+      }
+    }
+
     const serializedShift = {
       ...shift,
       hours: Number(shift.hours),
       cashTips: Number(shift.cashTips),
       creditTips: Number(shift.creditTips),
       liquorSales: Number(shift.liquorSales),
-      role: {
-        ...shift.role,
-        basePayRate: Number(shift.role.basePayRate),
+      role: shift.role ? {
+        id: shift.role.id,
+        name: shift.role.name,
+        basePayRate: currentBasePayRate, // Active base pay rate for the shift's date
         configs: shift.role.configs.map(config => ({
           ...config,
-          percentageRate: Number(config.percentageRate)
+          percentageRate: Number(config.percentageRate),
+          basePayRate: config.basePayRate !== null ? Number(config.basePayRate) : 0
         }))
-      }
+      } : undefined,
     }
 
     return NextResponse.json(serializedShift)

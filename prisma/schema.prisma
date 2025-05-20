@@ -28,7 +28,6 @@ model Employee {
 model Role {
   id          String       @id @default(cuid())
   name        String
-  basePayRate Decimal      @default(0)
   defaultFor  Employee[]   @relation("DefaultRole")
   shifts      Shift[]
   createdAt   DateTime     @default(now())
@@ -68,6 +67,7 @@ model RoleConfig {
   paysTipout        Boolean   @default(true)
   distributionGroup String?
   tipPoolGroup      String?
+  basePayRate       Decimal   @default(0)
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
   role              Role      @relation(fields: [roleId], references: [id], onDelete: Cascade)

@@ -433,6 +433,34 @@ export const calculateEmployeeRoleSummariesDaily = (shiftsToProcess: Shift[]): E
       const key = `${procShift.employee.id}-${procShift.role.name}`;
       let existing = summaries.get(key);
 
+      // --- Find active basePayRate from RoleConfig ---
+      const shiftDate = parseISO(procShift.date);
+      let activePayRateConfig: RoleConfig | null = null;
+      if (procShift.role && procShift.role.configs) {
+          const sortedConfigs = [...procShift.role.configs].sort((a, b) => 
+              parseISO(b.effectiveFrom).getTime() - parseISO(a.effectiveFrom).getTime()
+          );
+
+          activePayRateConfig = sortedConfigs.find(config => {
+              const effectiveFrom = parseISO(config.effectiveFrom);
+              // Check if shiftDate is on or after effectiveFrom
+              const isAfterOrOnFrom = isEqual(shiftDate, effectiveFrom) || isBefore(effectiveFrom, shiftDate);
+              if (!isAfterOrOnFrom) return false;
+
+              if (config.effectiveTo) {
+                  const effectiveTo = parseISO(config.effectiveTo);
+                  // Check if shiftDate is on or before effectiveTo
+                  const isOnOrBeforeTo = isEqual(shiftDate, effectiveTo) || isBefore(shiftDate, effectiveTo);
+                  return isOnOrBeforeTo;
+              }
+              return true; // No effectiveTo means it's active indefinitely from effectiveFrom
+          });
+      }
+      const currentBasePayRate = activePayRateConfig && typeof activePayRateConfig.basePayRate === 'number' 
+                                 ? activePayRateConfig.basePayRate 
+                                 : 0;
+      // --- End find active basePayRate ---
+
        if (!existing) {
             existing = {
                 employeeId: procShift.employee.id,
@@ -449,7 +477,7 @@ export const calculateEmployeeRoleSummariesDaily = (shiftsToProcess: Shift[]): E
                 cashTipsPerHour: 0,
                 creditTipsPerHour: 0,
                 totalTipsPerHour: 0,
-                basePayRate: Number(procShift.role.basePayRate),
+                basePayRate: currentBasePayRate, // Use new logic
                 totalPayrollTips: 0,     // Accumulate final payrollTips amount
                 totalLiquorSales: 0,
                 payrollTotal: 0,
@@ -470,7 +498,7 @@ export const calculateEmployeeRoleSummariesDaily = (shiftsToProcess: Shift[]): E
       existing.totalSaTipout += procShift.receivedSaTipout - procShift.paidSaTipout;
       existing.totalPayrollTips += procShift.payrollTips; // Use the calculated payrollTips
       // Update base pay rate - might need logic if it can change mid-period for same emp/role
-      existing.basePayRate = Number(procShift.role.basePayRate);
+      existing.basePayRate = currentBasePayRate; // Use new logic
 
       summaries.set(key, existing);
   });

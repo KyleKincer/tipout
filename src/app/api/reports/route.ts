@@ -63,35 +63,61 @@ async function fetchShiftsFromDB(startDate: string, endDate: string): Promise<Re
         // Ensure employee and role are non-null
         (shift): shift is ShiftWithIncludes & { employee: NonNullable<ShiftWithIncludes['employee']>, role: NonNullable<ShiftWithIncludes['role']> } =>
             !!shift.employee && !!shift.role
-    ).map((shift) => ({
-        id: shift.id,
-        date: shift.date.toISOString(),
-        hours: Number(shift.hours),
-        cashTips: Number(shift.cashTips),
-        creditTips: Number(shift.creditTips),
-        liquorSales: Number(shift.liquorSales),
-        employee: {
-            id: shift.employee.id,
-            name: shift.employee.name,
-        },
-        role: {
-            id: shift.role.id,
-            name: shift.role.name,
-            basePayRate: Number(shift.role.basePayRate),
-            // Map configs, ensuring the target type ReportShift['role']['configs'] is compatible
-            configs: (shift.role.configs || []).map((config) => ({
-                id: config.id,
-                tipoutType: config.tipoutType, // Assuming ReportShift uses string here
-                percentageRate: Number(config.percentageRate),
-                effectiveFrom: config.effectiveFrom.toISOString(),
-                effectiveTo: config.effectiveTo ? config.effectiveTo.toISOString() : null,
-                receivesTipout: config.receivesTipout ?? false,
-                paysTipout: config.paysTipout ?? true,
-                distributionGroup: config.distributionGroup ?? undefined,
-                tipPoolGroup: config.tipPoolGroup ?? undefined // Map the new field
-            })),
-        },
-    }));
+    ).map((shift) => {
+        const shiftDate = new Date(shift.date); // shift.date is already a Date object from Prisma
+        let currentActiveBasePayRate = 0;
+        if (shift.role && shift.role.configs && shift.role.configs.length > 0) {
+            // Sort by effectiveFrom descending to easily find the latest active
+            const sortedConfigs = [...shift.role.configs].sort((a, b) => 
+                new Date(b.effectiveFrom).getTime() - new Date(a.effectiveFrom).getTime()
+            );
+            const activeConfig = sortedConfigs.find(config => {
+                const effectiveFrom = new Date(config.effectiveFrom);
+                const isAfterOrOnFrom = shiftDate >= effectiveFrom;
+                if (!isAfterOrOnFrom) return false;
+                if (config.effectiveTo) {
+                    const effectiveTo = new Date(config.effectiveTo);
+                    return shiftDate <= effectiveTo;
+                }
+                return true; // No effectiveTo means active indefinitely
+            });
+
+            // activeConfig.basePayRate is Decimal from Prisma, needs conversion
+            if (activeConfig && activeConfig.basePayRate !== null && activeConfig.basePayRate !== undefined) {
+                 currentActiveBasePayRate = Number(activeConfig.basePayRate);
+            }
+        }
+
+        return {
+            id: shift.id,
+            date: shift.date.toISOString(), 
+            hours: Number(shift.hours),
+            cashTips: Number(shift.cashTips),
+            creditTips: Number(shift.creditTips),
+            liquorSales: Number(shift.liquorSales),
+            employee: {
+                id: shift.employee.id,
+                name: shift.employee.name,
+            },
+            role: {
+                id: shift.role.id,
+                name: shift.role.name,
+                basePayRate: currentActiveBasePayRate, // Populate with the determined active base pay rate
+                configs: (shift.role.configs || []).map((config) => ({
+                    id: config.id,
+                    tipoutType: config.tipoutType,
+                    percentageRate: Number(config.percentageRate),
+                    effectiveFrom: config.effectiveFrom.toISOString(),
+                    effectiveTo: config.effectiveTo ? config.effectiveTo.toISOString() : null,
+                    receivesTipout: config.receivesTipout ?? false,
+                    paysTipout: config.paysTipout ?? true,
+                    distributionGroup: config.distributionGroup ?? undefined,
+                    tipPoolGroup: config.tipPoolGroup ?? undefined,
+                    basePayRate: config.basePayRate !== null && config.basePayRate !== undefined ? Number(config.basePayRate) : 0 // Also ensure this is mapped
+                })),
+            },
+        };
+    });
 
     console.log(`Fetched ${reportShifts.length} shifts.`);
     return reportShifts;

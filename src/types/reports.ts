@@ -19,6 +19,7 @@ export type RoleConfig = {
   paysTipout?: boolean;      // Whether this role pays tipout of this type
   distributionGroup?: string; // For pooling tipouts RECEIVED FROM others (e.g., 'bartenders', 'hosts')
   tipPoolGroup?: string;     // For pooling tips COLLECTED BY this role WITH others (e.g. "server_pool", "bartender_pool")
+  basePayRate?: number; // Optional because it might not be on all configs initially, though migration sets it.
 };
 
 /**
@@ -30,7 +31,7 @@ export type Shift = {
   employee: Employee;
   role: {
     name: string;
-    basePayRate: number;
+    // basePayRate: number; // Removed from here
     configs: RoleConfig[];
   };
   hours: number;

@@ -9,27 +9,27 @@ const mockRoleConfig = (
     id: string,
     tipoutType: string,
     percentageRate: number,
-    { receivesTipout = false, paysTipout = true, distributionGroup = undefined, tipPoolGroup = undefined, effectiveFrom = '2024-01-01', effectiveTo = null }: Partial<RoleConfig> & { tipPoolGroup?: string | null } = {}
+    options: Partial<RoleConfig> & { tipPoolGroup?: string | null, basePayRate?: number } = {}
 ): RoleConfig => ({
     id,
     tipoutType: tipoutType as TipoutType,
     percentageRate,
-    effectiveFrom,
-    effectiveTo,
-    receivesTipout,
-    paysTipout,
-    distributionGroup: distributionGroup ?? undefined, // Handle null vs undefined
-    tipPoolGroup: tipPoolGroup ?? undefined,      // Handle null vs undefined
+    effectiveFrom: options.effectiveFrom ?? '2024-01-01',
+    effectiveTo: options.effectiveTo === undefined ? null : options.effectiveTo, // Allow explicit null for effectiveTo
+    receivesTipout: options.receivesTipout ?? false,
+    paysTipout: options.paysTipout ?? true,
+    distributionGroup: options.distributionGroup ?? undefined,
+    tipPoolGroup: options.tipPoolGroup ?? undefined,
+    basePayRate: options.basePayRate ?? 0, // Add basePayRate, default to 0
 });
 
-const mockRole = (
-    id: string,
+const mockRole = ( // basePayRate is now part of configs
+    id: string, 
     name: string,
-    basePayRate: number,
     configs: RoleConfig[],
 ): Shift['role'] => ({
     name,
-    basePayRate,
+    // basePayRate is no longer directly on role, it's sourced from active config
     configs,
 });
 
@@ -42,43 +42,48 @@ const mockShift = (
     cashTips: number,
     creditTips: number,
     liquorSales: number,
-    configs: RoleConfig[] = []
+    // The 'configs' parameter directly on mockShift was likely a leftover or misunderstanding.
+    // Shift data should primarily rely on `shift.role.configs`.
+    // We will remove the standalone `configs: RoleConfig[] = []` parameter from mockShift.
+    // If a test needs to override configs for a specific shift, it should modify `shift.role.configs`.
 ): Shift => ({
     id,
     employee,
-    role,
+    role, // This role object now contains the configs array which holds basePayRate
     date,
     hours,
     cashTips,
     creditTips,
     liquorSales,
-    configs,
+    // `configs` property removed from Shift type/mock as it's on `role.configs`
 });
 
-// --- Common Roles ---
+// --- Common Roles --- Updated to include basePayRate in configs
+// For simplicity, giving a default basePayRate to the first config.
+// If a test needs specific basePayRate for a role, it should customize configs.
 const serverConfigs = [
-    mockRoleConfig('cfgSrvBar', 'bar', 25, { paysTipout: true, tipPoolGroup: 'server_pool' }),
-    mockRoleConfig('cfgSrvHost', 'host', 7, { paysTipout: true, tipPoolGroup: 'server_pool' }),
-    mockRoleConfig('cfgSrvSa', 'sa', 4, { paysTipout: true, tipPoolGroup: 'server_pool' }),
+    mockRoleConfig('cfgSrvBar', 'bar', 25, { paysTipout: true, tipPoolGroup: 'server_pool', basePayRate: 3, effectiveFrom: '2024-01-01', effectiveTo: null }),
+    mockRoleConfig('cfgSrvHost', 'host', 7, { paysTipout: true, tipPoolGroup: 'server_pool', basePayRate: 3, effectiveFrom: '2024-01-01', effectiveTo: null }), 
+    mockRoleConfig('cfgSrvSa', 'sa', 4, { paysTipout: true, tipPoolGroup: 'server_pool', basePayRate: 3, effectiveFrom: '2024-01-01', effectiveTo: null }),
 ];
-const roleServer = mockRole('roleSrv', 'Server', 3, serverConfigs);
+const roleServer = mockRole('roleSrv', 'Server', serverConfigs);
 
 const barConfigs = [
-    mockRoleConfig('cfgBarBar', 'bar', 0, { receivesTipout: true, paysTipout: false, distributionGroup: 'bartenders', tipPoolGroup: 'bar_pool' }),
-    mockRoleConfig('cfgBarHost', 'host', 7, { paysTipout: true, tipPoolGroup: 'bar_pool' }),
-    mockRoleConfig('cfgBarSa', 'sa', 4, { paysTipout: true, tipPoolGroup: 'bar_pool' }),
+    mockRoleConfig('cfgBarBar', 'bar', 0, { receivesTipout: true, paysTipout: false, distributionGroup: 'bartenders', tipPoolGroup: 'bar_pool', basePayRate: 9, effectiveFrom: '2024-01-01', effectiveTo: null }),
+    mockRoleConfig('cfgBarHost', 'host', 7, { paysTipout: true, tipPoolGroup: 'bar_pool', basePayRate: 9, effectiveFrom: '2024-01-01', effectiveTo: null }),
+    mockRoleConfig('cfgBarSa', 'sa', 4, { paysTipout: true, tipPoolGroup: 'bar_pool', basePayRate: 9, effectiveFrom: '2024-01-01', effectiveTo: null }),
 ];
-const roleBar = mockRole('roleBar', 'Bar', 9, barConfigs);
+const roleBar = mockRole('roleBar', 'Bar', barConfigs);
 
 const hostConfigs = [
-     mockRoleConfig('cfgHostHost', 'host', 0, { receivesTipout: true, paysTipout: false, distributionGroup: 'hosts' }),
+     mockRoleConfig('cfgHostHost', 'host', 0, { receivesTipout: true, paysTipout: false, distributionGroup: 'hosts', basePayRate: 10, effectiveFrom: '2024-01-01', effectiveTo: null }),
 ];
-const roleHost = mockRole('roleHost', 'Host', 10, hostConfigs);
+const roleHost = mockRole('roleHost', 'Host', hostConfigs);
 
 const saConfigs = [
-     mockRoleConfig('cfgSaSa', 'sa', 0, { receivesTipout: true, paysTipout: false, distributionGroup: 'support' }),
+     mockRoleConfig('cfgSaSa', 'sa', 0, { receivesTipout: true, paysTipout: false, distributionGroup: 'support', basePayRate: 8, effectiveFrom: '2024-01-01', effectiveTo: null }),
 ];
-const roleSA = mockRole('roleSA', 'SA', 8, saConfigs);
+const roleSA = mockRole('roleSA', 'SA', saConfigs);
 
 
 // --- Employees ---
@@ -142,15 +147,17 @@ describe('reportCalculations', () => {
 
     describe('calculateEmployeeRoleSummariesDaily', () => {
         
-        it('Scenario: Simple Non-Pooled (Server pays, Host receives)', () => {
-            const simpleServerConfig = [ mockRoleConfig('cfgSimpleBar', 'bar', 10, { paysTipout: true }) ]; // Pays 10% Liq to Bar
-            const simpleHostConfig = [ mockRoleConfig('cfgSimpleHost', 'bar', 0, { receivesTipout: true, paysTipout: false, distributionGroup: 'hosts'}) ]; // Receives Bar Tipout
-            const roleSimpleServer = mockRole('roleSimpleSrv', 'Server', 3, simpleServerConfig);
-            const roleSimpleReceiver = mockRole('roleSimpleRec', 'Host', 10, simpleHostConfig);
+        it('Scenario: Simple Non-Pooled (Server pays, Host receives) - Adapted for basePayRate in config', () => {
+            // Ensure the mockRoleConfig includes basePayRate and effective dates
+            const simpleServerConfig = [ mockRoleConfig('cfgSimpleBar', 'bar', 10, { paysTipout: true, basePayRate: 3, effectiveFrom: '2024-01-01', effectiveTo: null }) ]; 
+            const simpleHostConfig = [ mockRoleConfig('cfgSimpleHost', 'bar', 0, { receivesTipout: true, paysTipout: false, distributionGroup: 'hosts', basePayRate: 10, effectiveFrom: '2024-01-01', effectiveTo: null }) ]; 
+            const roleSimpleServer = mockRole('roleSimpleSrv', 'Server', simpleServerConfig);
+            const roleSimpleReceiver = mockRole('roleSimpleRec', 'Host', simpleHostConfig);
             
             const shifts: Shift[] = [
-                mockShift('s1', empDylan, roleSimpleServer, '2024-03-15', 8, 50, 150, 400), // Pays Bar = 40
-                mockShift('s2', empChristina, roleSimpleReceiver, '2024-03-15', 8, 0, 0, 0), // Receives Bar = 40
+                // mockShift no longer takes a 9th 'configs' parameter. It uses shift.role.configs.
+                mockShift('s1', empDylan, roleSimpleServer, '2024-03-15', 8, 50, 150, 400), 
+                mockShift('s2', empChristina, roleSimpleReceiver, '2024-03-15', 8, 0, 0, 0), 
             ];
             
             const summaries = calculateEmployeeRoleSummariesDaily(shifts);
@@ -182,23 +189,24 @@ describe('reportCalculations', () => {
             // Server Pool: Dylan (8h) + Regan (7h) = 15h total
             // Server Pool Tips: Cash=100, Credit=300
             // Server Pool Liq Sales: Dylan=400, Regan=300 = 700 total
-            // Bar Tipout: 10% of Liq Sales (paid after pooling)
-            // Host Tipout: 7% of Tips (paid before pooling)
-            // SA Tipout: 4% of Tips (paid before pooling)
-            const serverPoolConfig = [
-                mockRoleConfig('cfgBar', 'bar', 10, { paysTipout: true }), // 10% of Liq to Bar
-                mockRoleConfig('cfgHost', 'host', 7, { paysTipout: true }), // 7% of Tips to Host
-                mockRoleConfig('cfgSA', 'sa', 4, { paysTipout: true }), // 4% of Tips to SA
-            ];
+            // Bar Tipout: 10% of Liq Sales (paid by individual servers from their share of sales if not specified otherwise, or by pool)
+            // Host Tipout: 7% of Original Tips (paid by pool before distribution or by individuals)
+            // SA Tipout: 4% of Original Tips (paid by pool before distribution or by individuals)
+            // Base pay for server is 3, for bar is 9, for host is 10, for SA is 8 (from updated global mocks)
+
+            // The global roleServer, roleBar etc. already have basePayRate in their configs.
+            // The mockShift no longer takes a 9th 'configs' parameter. It uses shift.role.configs.
             const shifts: Shift[] = [
-                mockShift('s1', empDylan, roleServer, '2024-03-15', 8, 50, 150, 400, serverPoolConfig),
-                mockShift('s2', empRegan, roleServer, '2024-03-15', 7, 50, 150, 300, serverPoolConfig),
-                mockShift('s3', empBrigid, roleBar, '2024-03-15', 6, 0, 0, 0), // Bar present
-                mockShift('s4', empChristina, roleHost, '2024-03-15', 5, 0, 0, 0), // Host present
-                mockShift('s5', empAlex, roleSA, '2024-03-15', 4, 0, 0, 0), // SA present
+                mockShift('s1', empDylan, roleServer, '2024-03-15', 8, 50, 150, 400), 
+                mockShift('s2', empRegan, roleServer, '2024-03-15', 7, 50, 150, 300), 
+                mockShift('s3', empBrigid, roleBar, '2024-03-15', 6, 0, 0, 0),    
+                mockShift('s4', empChristina, roleHost, '2024-03-15', 5, 0, 0, 0), 
+                mockShift('s5', empAlex, roleSA, '2024-03-15', 4, 0, 0, 0),       
             ];
 
             const summaries = calculateEmployeeRoleSummariesDaily(shifts);
+            // Payroll expectations need to be updated based on the basePayRates from the global mocks:
+            // Server: 3, Bar: 9, Host: 10, SA: 8
             const dylanSummary = summaries.find(s => s.employeeId === empDylan.id);
             const reganSummary = summaries.find(s => s.employeeId === empRegan.id);
             const brigidSummary = summaries.find(s => s.employeeId === empBrigid.id);
@@ -214,7 +222,7 @@ describe('reportCalculations', () => {
             expect(dylanSummary!.totalHostTipout).toBeCloseTo(0); // Pooled display
             expect(dylanSummary!.totalSaTipout).toBeCloseTo(0); // Pooled display
             expect(dylanSummary!.totalPayrollTips).toBeCloseTo(8 * 8.1333 - 40); // 65.07 - 40 = 25.07
-            expect(dylanSummary!.payrollTotal).toBeCloseTo((3 * 8) + 25.07); // 24 + 25.07 = 49.07
+            expect(dylanSummary!.payrollTotal).toBeCloseTo((3 * 8) + 25.07); // Server base rate 3
 
             // Regan (Server Pool)
             expect(reganSummary!.tipPoolGroup).toBe('server_pool');
@@ -225,7 +233,7 @@ describe('reportCalculations', () => {
             expect(reganSummary!.totalHostTipout).toBeCloseTo(0);
             expect(reganSummary!.totalSaTipout).toBeCloseTo(0);
             expect(reganSummary!.totalPayrollTips).toBeCloseTo(7 * 8.1333 - 30); // 56.93 - 30 = 26.93
-            expect(reganSummary!.payrollTotal).toBeCloseTo((3 * 7) + 26.93); // 21 + 26.93 = 47.93
+            expect(reganSummary!.payrollTotal).toBeCloseTo((3 * 7) + 26.93); // Server base rate 3
 
             // Brigid (Bar)
             expect(brigidSummary!.tipPoolGroup).toBeUndefined(); // Not pooled
@@ -261,10 +269,10 @@ describe('reportCalculations', () => {
             expect(alexSummary!.payrollTotal).toBeCloseTo((4 * 4) + 16); // 16 + 16 = 32
         });
         
-        it('should handle zero hour shifts correctly', () => {
+        it('should handle zero hour shifts correctly (basePayRate from config)', () => {
              const shifts: Shift[] = [
-                 mockShift('s1', empDylan, roleServer, '2024-03-15', 0, 50, 150, 400), // Zero hours
-                 mockShift('s2', empChristina, roleHost, '2024-03-15', 8, 0, 0, 0), // Normal hours
+                 mockShift('s1', empDylan, roleServer, '2024-03-15', 0, 50, 150, 400), 
+                 mockShift('s2', empChristina, roleHost, '2024-03-15', 8, 0, 0, 0), 
             ];
             const summaries = calculateEmployeeRoleSummariesDaily(shifts);
             const dylanSummary = summaries.find(s => s.employeeName === 'Dylan');
@@ -286,5 +294,123 @@ describe('reportCalculations', () => {
             expect(summaries).toEqual([]);
         });
 
+        // --- New Tests for Base Pay Rate Logic ---
+        describe('calculateEmployeeRoleSummariesDaily - Base Pay Rate Changes', () => {
+            const empTest = mockEmployee('empTest', 'Tester');
+
+            it('should use basePayRate from config active on shift date', () => {
+                const roleWithChangingPay: Shift['role'] = mockRole('rolePayChange', 'PayRole', [
+                    mockRoleConfig('cfgPay1', 'GENERAL', 0, { basePayRate: 10, effectiveFrom: '2024-01-01', effectiveTo: '2024-01-15' }),
+                    mockRoleConfig('cfgPay2', 'GENERAL', 0, { basePayRate: 12, effectiveFrom: '2024-01-16', effectiveTo: '2024-01-31' }),
+                ]);
+                const shifts: Shift[] = [
+                    mockShift('shift1', empTest, roleWithChangingPay, '2024-01-10', 8, 0, 100, 0), // Should use $10/hr
+                    mockShift('shift2', empTest, roleWithChangingPay, '2024-01-20', 8, 0, 100, 0), // Should use $12/hr
+                ];
+                const summaries = calculateEmployeeRoleSummariesDaily(shifts);
+                
+                // Need to find summaries more reliably if order isn't guaranteed or other shifts exist
+                // Since these are different days, they will be processed separately and then aggregated.
+                // If they were the same day, they'd be one summary.
+                // For this test, assuming they result in distinct summary entries due to different processing days or if we were to check daily results.
+                // However, calculateEmployeeRoleSummariesDaily aggregates, so we expect ONE summary for empTest/PayRole.
+                // The basePayRate on that summary will be from the LATEST shift processed for that employee-role combo.
+                // The important part is that payrollTotal reflects the different base rates.
+                
+                const summary = summaries.find(s => s.employeeName === 'Tester');
+                expect(summary).toBeDefined();
+                expect(summary!.totalHours).toBe(16); // 8 + 8
+                expect(summary!.basePayRate).toBe(12); // From the latest shift (Jan 20)
+                expect(summary!.totalPayrollTips).toBe(200); // 100 + 100
+                // Payroll: (10*8 + 100) + (12*8 + 100) = (80+100) + (96+100) = 180 + 196 = 376
+                expect(summary!.payrollTotal).toBe(376);
+            });
+
+            it('should use correct basePayRate on effectiveFrom and effectiveTo dates', () => {
+                 const roleWithChangingPay: Shift['role'] = mockRole('rolePayEdge', 'PayRoleEdge', [
+                    mockRoleConfig('cfgPayEdge1', 'GENERAL', 0, { basePayRate: 10, effectiveFrom: '2024-02-01', effectiveTo: '2024-02-10' }),
+                    mockRoleConfig('cfgPayEdge2', 'GENERAL', 0, { basePayRate: 12, effectiveFrom: '2024-02-11', effectiveTo: '2024-02-20' }),
+                ]);
+                const shifts: Shift[] = [
+                    mockShift('sEdge1', empTest, roleWithChangingPay, '2024-02-10', 5, 0, 50, 0), // Uses $10 (on effectiveTo of first config)
+                    mockShift('sEdge2', empTest, roleWithChangingPay, '2024-02-11', 5, 0, 50, 0), // Uses $12 (on effectiveFrom of second config)
+                ];
+                const summaries = calculateEmployeeRoleSummariesDaily(shifts);
+                const summary = summaries.find(s => s.employeeName === 'Tester');
+                expect(summary).toBeDefined();
+                expect(summary!.totalHours).toBe(10);
+                expect(summary!.basePayRate).toBe(12); // From latest shift (Feb 11)
+                // Payroll: (10*5 + 50) + (12*5 + 50) = (50+50) + (60+50) = 100 + 110 = 210
+                expect(summary!.payrollTotal).toBe(210);
+            });
+            
+            it('should use default basePayRate (0) if no config has basePayRate defined or no config matches', () => {
+                const roleNoPayConfig: Shift['role'] = mockRole('roleNoPay', 'NoPayRole', [
+                    // Explicitly undefined basePayRate for the active period
+                    mockRoleConfig('cfgNoPay', 'GENERAL', 0, { basePayRate: undefined, effectiveFrom: '2024-01-01', effectiveTo: null }),
+                ]);
+                 const shifts: Shift[] = [
+                    mockShift('sNoPay', empTest, roleNoPayConfig, '2024-01-05', 8, 0, 100, 0),
+                ];
+                const summaries = calculateEmployeeRoleSummariesDaily(shifts);
+                const summary = summaries[0];
+
+                expect(summary.basePayRate).toBe(0); // Defaults to 0 because undefined in config
+                expect(summary.payrollTotal).toBe((0 * 8) + 100); // 0 + 100 = 100
+
+                // Test with no matching config at all for the shift date
+                 const roleNoMatchingConfig: Shift['role'] = mockRole('roleNoMatch', 'NoMatchRole', [
+                    mockRoleConfig('cfgNoMatchPay', 'GENERAL', 0, { basePayRate: 20, effectiveFrom: '2023-01-01', effectiveTo: '2023-12-31' }),
+                ]);
+                 const shifts2: Shift[] = [
+                    mockShift('sNoMatchPay', empTest, roleNoMatchingConfig, '2024-01-10', 8, 0, 100, 0),
+                ];
+                const summaries2 = calculateEmployeeRoleSummariesDaily(shifts2);
+                const summary2 = summaries2[0];
+                expect(summary2.basePayRate).toBe(0); // Defaults to 0 as no config is active
+                expect(summary2.payrollTotal).toBe((0 * 8) + 100);
+            });
+
+            it('should handle multiple shifts for the same employee/role across basePayRate changes (aggregation check)', () => {
+                 const roleMultiPay: Shift['role'] = mockRole('roleMulti', 'MultiPay', [
+                    mockRoleConfig('cfgMP1', 'GENERAL', 0, { basePayRate: 10, effectiveFrom: '2024-03-01', effectiveTo: '2024-03-10' }),
+                    mockRoleConfig('cfgMP2', 'GENERAL', 0, { basePayRate: 15, effectiveFrom: '2024-03-11', effectiveTo: null }),
+                ]);
+                const shifts: Shift[] = [
+                    // These shifts are on different days, so daily processing will handle them separately,
+                    // then they are aggregated into one EmployeeRoleSummary.
+                    mockShift('mShift1', empTest, roleMultiPay, '2024-03-05', 8, 0, 50, 0), // $10/hr -> Base Pay: 80, PayrollTips: 50
+                    mockShift('mShift2', empTest, roleMultiPay, '2024-03-15', 6, 0, 30, 0), // $15/hr -> Base Pay: 90, PayrollTips: 30
+                ];
+
+                const summaries = calculateEmployeeRoleSummariesDaily(shifts);
+                const summary = summaries.find(s => s.employeeName === 'Tester');
+
+                expect(summary).toBeDefined();
+                expect(summary!.totalHours).toBe(14);
+                // The basePayRate on the summary object will be the one from the *last* shift processed for that employee/role
+                // during the aggregation phase. This is an existing behavior of the summarization.
+                expect(summary!.basePayRate).toBe(15); 
+                expect(summary!.totalPayrollTips).toBeCloseTo(80); // 50 + 30
+                expect(summary!.payrollTotal).toBeCloseTo((10 * 8) + 50 + (15 * 6) + 30); // 80 + 50 + 90 + 30 = 250
+            });
+            
+            it('Role has only one RoleConfig for base pay', () => {
+                const roleSinglePayConfig: Shift['role'] = mockRole('roleSingle', 'SinglePay', [
+                    mockRoleConfig('cfgSingle1', 'GENERAL', 0, { basePayRate: 11, effectiveFrom: '2024-01-01', effectiveTo: null }),
+                ]);
+                const shifts: Shift[] = [
+                    mockShift('sSingle1', empTest, roleSinglePayConfig, '2024-01-05', 7, 0, 70, 0),
+                    mockShift('sSingle2', empTest, roleSinglePayConfig, '2024-02-05', 7, 0, 70, 0),
+                ];
+                const summaries = calculateEmployeeRoleSummariesDaily(shifts);
+                const summary = summaries.find(s => s.employeeName === 'Tester');
+                expect(summary).toBeDefined();
+                expect(summary!.totalHours).toBe(14);
+                expect(summary!.basePayRate).toBe(11);
+                expect(summary!.totalPayrollTips).toBe(140);
+                expect(summary!.payrollTotal).toBe((11 * 14) + 140); // 154 + 140 = 294
+            });
+        });
     });
 }); 

@@ -7,13 +7,16 @@ export async function GET() {
       orderBy: {
         name: 'asc',
       },
+      orderBy: {
+        name: 'asc',
+      },
       select: {
         id: true,
         name: true,
-        basePayRate: true,
+        // basePayRate is no longer directly on Role, it's on RoleConfig
         configs: {
-          where: {
-            effectiveTo: null,
+          orderBy: {
+            effectiveFrom: 'desc', // Get the latest one first
           },
           select: {
             id: true,
@@ -22,20 +25,30 @@ export async function GET() {
             effectiveFrom: true,
             effectiveTo: true,
             paysTipout: true,
+            receivesTipout: true, // ensure this is selected
+            basePayRate: true,    // ensure this is selected
           },
         },
       },
     })
 
     // Convert Decimal to number for JSON serialization
-    const serializedRoles = roles.map(role => ({
-      ...role,
-      basePayRate: Number(role.basePayRate),
-      configs: role.configs.map(config => ({
-        ...config,
-        percentageRate: Number(config.percentageRate),
-      })),
-    }))
+    const serializedRoles = roles.map(role => {
+      // Determine current basePayRate from the latest applicable config
+      const currentConfig = role.configs.find(c => c.effectiveTo === null) || role.configs[0];
+      const currentBasePayRate = currentConfig ? Number(currentConfig.basePayRate) : 0;
+
+      return {
+        id: role.id,
+        name: role.name,
+        basePayRate: currentBasePayRate, // This is the current effective base pay rate
+        configs: role.configs.map(config => ({
+          ...config,
+          percentageRate: Number(config.percentageRate),
+          basePayRate: Number(config.basePayRate),
+        })),
+      };
+    })
 
     return NextResponse.json(serializedRoles)
   } catch (error) {
@@ -62,23 +75,50 @@ export async function POST(request: Request) {
     const role = await prisma.role.create({
       data: {
         name,
-        basePayRate: parseFloat(basePayRate),
+        configs: {
+          create: {
+            basePayRate: parseFloat(basePayRate),
+            effectiveFrom: new Date(),
+            effectiveTo: null,
+            tipoutType: "GENERAL_PAY_INFO", // Standard type for base pay configurations
+            percentageRate: 0,
+            receivesTipout: false,
+            paysTipout: false,
+          },
+        },
       },
       select: {
         id: true,
         name: true,
-        basePayRate: true,
-        configs: true,
+        configs: { // Select configs to get the newly created one
+          orderBy: {
+            effectiveFrom: 'desc',
+          },
+          select: {
+            id: true,
+            tipoutType: true,
+            percentageRate: true,
+            effectiveFrom: true,
+            effectiveTo: true,
+            paysTipout: true,
+            receivesTipout: true,
+            basePayRate: true,
+          },
+        },
       },
     })
 
     // Convert Decimal to number for JSON serialization
+    // The first config (latest) will have the basePayRate just set.
+    const currentConfig = role.configs[0];
     const serializedRole = {
-      ...role,
-      basePayRate: Number(role.basePayRate),
+      id: role.id,
+      name: role.name,
+      basePayRate: currentConfig ? Number(currentConfig.basePayRate) : 0,
       configs: role.configs.map(config => ({
         ...config,
         percentageRate: Number(config.percentageRate),
+        basePayRate: Number(config.basePayRate),
       })),
     }
 

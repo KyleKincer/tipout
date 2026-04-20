@@ -1,150 +1,129 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
+import { useMutation, useQuery } from 'convex/react'
+import { api } from '../../../../../../convex/_generated/api'
+import type { Id } from '../../../../../../convex/_generated/dataModel'
 import LoadingSpinner from '@/components/LoadingSpinner'
 
-type RoleConfig = {
-  id?: string
-  tipoutType: string
+type TipoutType = 'bar' | 'host' | 'sa'
+
+type RoleConfigDraft = {
+  tipoutType: TipoutType | ''
   percentageRate: number
   effectiveFrom: string
   effectiveTo: string | null
   receivesTipout: boolean
   paysTipout: boolean
   distributionGroup: string | null
+  tipPoolGroup: string | null
+}
+
+// What replaceForRole accepts (must have a concrete tipoutType)
+type ReplaceConfig = {
+  tipoutType: TipoutType
+  percentageRate: number
+  effectiveFrom: string
+  effectiveTo: string | null
+  receivesTipout: boolean
+  paysTipout: boolean
+  distributionGroup?: string | null
   tipPoolGroup?: string | null
 }
 
 export default function EditRolePage() {
   const params = useParams()
   const router = useRouter()
-  const [role, setRole] = useState({
+
+  const idParam = typeof params.id === 'string' ? params.id : Array.isArray(params.id) ? params.id[0] : ''
+  const isNew = idParam === 'new'
+  const roleId = isNew ? null : (idParam as Id<'roles'>)
+
+  const roleData = useQuery(api.roles.get, roleId ? { id: roleId } : 'skip')
+  const poolGroupsData = useQuery(api.tipPoolGroups.list)
+  const createRole = useMutation(api.roles.create)
+  const updateRole = useMutation(api.roles.update)
+  const replaceConfigs = useMutation(api.roleConfigs.replaceForRole)
+
+  const [role, setRole] = useState<{ id: string; name: string; basePayRate: number }>({
     id: '',
     name: '',
-    basePayRate: 0
+    basePayRate: 0,
   })
-  const [configs, setConfigs] = useState<RoleConfig[]>([])
-  const [loading, setLoading] = useState(true)
+  const [configs, setConfigs] = useState<RoleConfigDraft[]>([])
   const [error, setError] = useState<string | null>(null)
-  const [existingPoolGroups, setExistingPoolGroups] = useState<string[]>([])
-  
-  const tipoutTypes = ['bar', 'host', 'sa']
+  const [hydrated, setHydrated] = useState(isNew)
+
+  const tipoutTypes: TipoutType[] = ['bar', 'host', 'sa']
   const distributionGroups = ['bartenders', 'hosts', 'servers', 'support']
+  const existingPoolGroups = poolGroupsData ?? []
 
-  const fetchRole = useCallback(async () => {
-    try {
-      const response = await fetch(`/api/roles/${params.id}`)
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        const errorMessage = errorData.error || `Failed to fetch role (Status: ${response.status})`;
-        throw new Error(errorMessage);
-      }
-      
-      const data = await response.json()
-      setRole({
-        id: data.id,
-        name: data.name,
-        basePayRate: Number(data.basePayRate)
-      })
-    } catch (err) {
-      console.error('Error fetching role:', err)
-      setError(`Failed to load role data: ${err instanceof Error ? err.message : 'Unknown error'}`)
-    }
-  }, [params.id])
-
-  const fetchConfigs = useCallback(async () => {
-    try {
-      const response = await fetch(`/api/roles/${params.id}/config`)
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        const errorMessage = errorData.error || `Failed to fetch configurations (Status: ${response.status})`;
-        throw new Error(errorMessage);
-      }
-      
-      const data = await response.json()
-      setConfigs(data.map((config: RoleConfig) => ({
-        ...config,
+  // Hydrate form state once the role query resolves.
+  useEffect(() => {
+    if (isNew || !roleData) return
+    setRole({
+      id: roleData.id,
+      name: roleData.name,
+      basePayRate: Number(roleData.basePayRate),
+    })
+    setConfigs(
+      roleData.configs.map((config) => ({
+        tipoutType: config.tipoutType,
         percentageRate: Number(config.percentageRate),
         effectiveFrom: new Date(config.effectiveFrom).toISOString().split('T')[0],
-        effectiveTo: config.effectiveTo ? new Date(config.effectiveTo).toISOString().split('T')[0] : null,
-        tipPoolGroup: config.tipPoolGroup || null
-      })))
-    } catch (err) {
-      console.error('Error fetching configs:', err)
-      setError(`Failed to load role configurations: ${err instanceof Error ? err.message : 'Unknown error'}`)
-    } finally {
-      setLoading(false)
-    }
-  }, [params.id])
-
-  const fetchExistingPoolGroups = useCallback(async () => {
-    try {
-      const response = await fetch('/api/tip-pool-groups');
-      if (!response.ok) {
-        throw new Error('Failed to fetch existing pool groups');
-      }
-      const data = await response.json();
-      setExistingPoolGroups(data);
-    } catch (err) {
-      console.error('Error fetching pool groups:', err);
-      // Non-critical error, maybe just log it
-    }
-  }, [])
-
-  useEffect(() => {
-    if (params.id === 'new') {
-      // Creating a new role
-      setLoading(false)
-      return
-    }
-
-    // Fetch existing role
-    fetchRole()
-    fetchConfigs()
-    fetchExistingPoolGroups()
-  }, [params.id, fetchRole, fetchConfigs, fetchExistingPoolGroups])
+        effectiveTo: config.effectiveTo
+          ? new Date(config.effectiveTo).toISOString().split('T')[0]
+          : null,
+        receivesTipout: config.receivesTipout,
+        paysTipout: config.paysTipout,
+        distributionGroup: config.distributionGroup,
+        tipPoolGroup: config.tipPoolGroup,
+      })),
+    )
+    setHydrated(true)
+  }, [isNew, roleData])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
-    
+
     try {
-      // Save the role
-      const roleResponse = await fetch(`/api/roles/${params.id === 'new' ? '' : params.id}`, {
-        method: params.id === 'new' ? 'POST' : 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(role),
-      })
-      
-      if (!roleResponse.ok) {
-        const errorData = await roleResponse.json().catch(() => ({}))
-        const errorMessage = errorData.error || `Failed to save role (Status: ${roleResponse.status})`
-        throw new Error(errorMessage)
-      }
-      
-      const savedRole = await roleResponse.json()
-      const roleId = savedRole.id
-      
-      // Save the configurations
-      if (roleId) {
-        const configResponse = await fetch(`/api/roles/${roleId}/config`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(configs),
+      // Save the role: create or update
+      let savedRoleId: Id<'roles'>
+      if (isNew) {
+        const created = await createRole({
+          name: role.name,
+          basePayRate: role.basePayRate,
         })
-        
-        if (!configResponse.ok) {
-          const errorData = await configResponse.json().catch(() => ({}))
-          const errorMessage = errorData.error || `Failed to save role configurations (Status: ${configResponse.status})`
-          throw new Error(errorMessage)
-        }
+        savedRoleId = created.id
+      } else {
+        if (!roleId) throw new Error('Role ID is missing')
+        const updated = await updateRole({
+          id: roleId,
+          name: role.name,
+          basePayRate: role.basePayRate,
+        })
+        savedRoleId = updated.id
       }
-      
+
+      // Save the configurations.
+      // replaceForRole only accepts configs with a real tipoutType; drop drafts that are only
+      // there to carry the tipPoolGroup input with no tipout rule.
+      const payloadConfigs: ReplaceConfig[] = configs
+        .filter((c): c is RoleConfigDraft & { tipoutType: TipoutType } => c.tipoutType !== '')
+        .map((c) => ({
+          tipoutType: c.tipoutType,
+          percentageRate: c.percentageRate,
+          effectiveFrom: c.effectiveFrom,
+          effectiveTo: c.effectiveTo,
+          receivesTipout: c.receivesTipout,
+          paysTipout: c.paysTipout,
+          distributionGroup: c.distributionGroup,
+          tipPoolGroup: c.tipPoolGroup,
+        }))
+      await replaceConfigs({ roleId: savedRoleId, configs: payloadConfigs })
+
       router.push('/roles')
     } catch (err) {
       console.error('Error saving role:', err)
@@ -152,8 +131,18 @@ export default function EditRolePage() {
     }
   }
 
-  if (loading) {
+  if (!isNew && (roleData === undefined || !hydrated)) {
     return <LoadingSpinner />
+  }
+
+  if (!isNew && roleData === null) {
+    return (
+      <div className="px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
+        <div className="mt-8 rounded-md bg-red-50 dark:bg-red-900/50 p-4">
+          <h3 className="text-sm font-medium text-red-800 dark:text-red-200">Role not found</h3>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -161,7 +150,7 @@ export default function EditRolePage() {
       <div className="md:flex md:items-center md:justify-between">
         <div className="min-w-0 flex-1">
           <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">
-            {params.id === 'new' ? 'Create Role' : 'Edit Role'}
+            {isNew ? 'Create Role' : 'Edit Role'}
           </h2>
         </div>
       </div>
@@ -242,18 +231,18 @@ export default function EditRolePage() {
                 </p>
 
                 <div className="mt-4 space-y-6">
-                  {tipoutTypes.map(type => {
-                    const config = configs.find(c => 
-                      c.tipoutType === type && c.paysTipout && !c.receivesTipout
-                    ) || {
-                      tipoutType: type,
-                      percentageRate: 0,
-                      paysTipout: false,
-                      receivesTipout: false,
-                      effectiveFrom: new Date().toISOString().split('T')[0],
-                      effectiveTo: null,
-                      distributionGroup: null
-                    }
+                  {tipoutTypes.map((type) => {
+                    const config =
+                      configs.find((c) => c.tipoutType === type && c.paysTipout && !c.receivesTipout) || {
+                        tipoutType: type,
+                        percentageRate: 0,
+                        paysTipout: false,
+                        receivesTipout: false,
+                        effectiveFrom: new Date().toISOString().split('T')[0],
+                        effectiveTo: null,
+                        distributionGroup: null,
+                        tipPoolGroup: null,
+                      }
 
                     return (
                       <div key={type} className="flex flex-col sm:flex-row sm:items-center gap-4">
@@ -264,36 +253,34 @@ export default function EditRolePage() {
                             checked={config.paysTipout}
                             onChange={(e) => {
                               const updatedConfigs = [...configs]
-                              const index = configs.findIndex(c => 
-                                c.tipoutType === type && c.paysTipout && !c.receivesTipout
+                              const index = configs.findIndex(
+                                (c) => c.tipoutType === type && c.paysTipout && !c.receivesTipout,
                               )
-                              
+
                               if (e.target.checked) {
                                 if (index === -1) {
                                   updatedConfigs.push({
                                     ...config,
                                     paysTipout: true,
-                                    receivesTipout: false
+                                    receivesTipout: false,
                                   })
                                 } else {
                                   updatedConfigs[index] = {
                                     ...updatedConfigs[index],
                                     paysTipout: true,
-                                    receivesTipout: false
+                                    receivesTipout: false,
                                   }
                                 }
                               } else if (index !== -1) {
                                 updatedConfigs.splice(index, 1)
                               }
-                              
+
                               setConfigs(updatedConfigs)
                             }}
                             className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded dark:border-gray-600"
                           />
                           <label htmlFor={`pays-${type}`} className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                            {type === 'bar' ? 'Bar Tipout' : 
-                             type === 'host' ? 'Host Tipout' : 
-                             'SA Tipout'}
+                            {type === 'bar' ? 'Bar Tipout' : type === 'host' ? 'Host Tipout' : 'SA Tipout'}
                           </label>
                         </div>
                         <div className={`flex flex-wrap items-center gap-3 transition-opacity duration-200 ${config.paysTipout ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
@@ -303,24 +290,24 @@ export default function EditRolePage() {
                               value={config.percentageRate}
                               onChange={(e) => {
                                 const updatedConfigs = [...configs]
-                                const index = configs.findIndex(c => 
-                                  c.tipoutType === type && c.paysTipout && !c.receivesTipout
+                                const index = configs.findIndex(
+                                  (c) => c.tipoutType === type && c.paysTipout && !c.receivesTipout,
                                 )
-                                
+
                                 if (index !== -1) {
                                   updatedConfigs[index] = {
                                     ...updatedConfigs[index],
-                                    percentageRate: parseFloat(e.target.value)
+                                    percentageRate: parseFloat(e.target.value),
                                   }
                                 } else {
                                   updatedConfigs.push({
                                     ...config,
                                     percentageRate: parseFloat(e.target.value),
                                     paysTipout: true,
-                                    receivesTipout: false
+                                    receivesTipout: false,
                                   })
                                 }
-                                
+
                                 setConfigs(updatedConfigs)
                               }}
                               step="0.1"
@@ -346,18 +333,18 @@ export default function EditRolePage() {
                 </p>
 
                 <div className="mt-4 space-y-6">
-                  {tipoutTypes.map(type => {
-                    const config = configs.find(c => 
-                      c.tipoutType === type && c.receivesTipout && !c.paysTipout
-                    ) || {
-                      tipoutType: type,
-                      percentageRate: 0,
-                      paysTipout: false,
-                      receivesTipout: false,
-                      effectiveFrom: new Date().toISOString().split('T')[0],
-                      effectiveTo: null,
-                      distributionGroup: null
-                    }
+                  {tipoutTypes.map((type) => {
+                    const config =
+                      configs.find((c) => c.tipoutType === type && c.receivesTipout && !c.paysTipout) || {
+                        tipoutType: type,
+                        percentageRate: 0,
+                        paysTipout: false,
+                        receivesTipout: false,
+                        effectiveFrom: new Date().toISOString().split('T')[0],
+                        effectiveTo: null,
+                        distributionGroup: null,
+                        tipPoolGroup: null,
+                      }
 
                     return (
                       <div key={type} className="flex flex-col sm:flex-row sm:items-center gap-4">
@@ -368,39 +355,36 @@ export default function EditRolePage() {
                             checked={config.receivesTipout}
                             onChange={(e) => {
                               const updatedConfigs = [...configs]
-                              const index = configs.findIndex(c => 
-                                c.tipoutType === type && c.receivesTipout && !c.paysTipout
+                              const index = configs.findIndex(
+                                (c) => c.tipoutType === type && c.receivesTipout && !c.paysTipout,
                               )
-                              
+
                               if (e.target.checked) {
                                 if (index === -1) {
                                   updatedConfigs.push({
                                     ...config,
                                     receivesTipout: true,
                                     paysTipout: false,
-                                    distributionGroup: type === 'bar' ? 'bartenders' :
-                                                     type === 'host' ? 'hosts' :
-                                                     'support'
+                                    distributionGroup:
+                                      type === 'bar' ? 'bartenders' : type === 'host' ? 'hosts' : 'support',
                                   })
                                 } else {
                                   updatedConfigs[index] = {
                                     ...updatedConfigs[index],
                                     receivesTipout: true,
-                                    paysTipout: false
+                                    paysTipout: false,
                                   }
                                 }
                               } else if (index !== -1) {
                                 updatedConfigs.splice(index, 1)
                               }
-                              
+
                               setConfigs(updatedConfigs)
                             }}
                             className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded dark:border-gray-600"
                           />
                           <label htmlFor={`receives-${type}`} className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                            {type === 'bar' ? 'Bar Tipout' : 
-                             type === 'host' ? 'Host Tipout' : 
-                             'SA Tipout'}
+                            {type === 'bar' ? 'Bar Tipout' : type === 'host' ? 'Host Tipout' : 'SA Tipout'}
                           </label>
                         </div>
                         <div className={`flex flex-wrap items-center gap-3 transition-opacity duration-200 ${config.receivesTipout ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
@@ -408,30 +392,30 @@ export default function EditRolePage() {
                             value={config.distributionGroup || ''}
                             onChange={(e) => {
                               const updatedConfigs = [...configs]
-                              const index = configs.findIndex(c => 
-                                c.tipoutType === type && c.receivesTipout && !c.paysTipout
+                              const index = configs.findIndex(
+                                (c) => c.tipoutType === type && c.receivesTipout && !c.paysTipout,
                               )
-                              
+
                               if (index !== -1) {
                                 updatedConfigs[index] = {
                                   ...updatedConfigs[index],
-                                  distributionGroup: e.target.value || null
+                                  distributionGroup: e.target.value || null,
                                 }
                               } else {
                                 updatedConfigs.push({
                                   ...config,
                                   distributionGroup: e.target.value || null,
                                   receivesTipout: true,
-                                  paysTipout: false
+                                  paysTipout: false,
                                 })
                               }
-                              
+
                               setConfigs(updatedConfigs)
                             }}
                             className="block w-32 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white px-3 py-2"
                           >
                             <option value="">No pool</option>
-                            {distributionGroups.map(group => (
+                            {distributionGroups.map((group) => (
                               <option key={group} value={group}>
                                 {group.charAt(0).toUpperCase() + group.slice(1)}
                               </option>
@@ -449,8 +433,8 @@ export default function EditRolePage() {
               <div className="mt-6 p-4 bg-white/50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
                 <h4 className="text-md font-medium text-gray-900 dark:text-white">Tip Pooling</h4>
                 <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                  Optionally assign this role to a tip pool group (e.g., "servers", "bartenders"). Roles within the same group on the same day will have their tips pooled and distributed based on hours worked.
-                  Leave blank if this role's tips should not be pooled.
+                  Optionally assign this role to a tip pool group (e.g., &quot;servers&quot;, &quot;bartenders&quot;). Roles within the same group on the same day will have their tips pooled and distributed based on hours worked.
+                  Leave blank if this role&apos;s tips should not be pooled.
                 </p>
 
                 <div className="mt-4">
@@ -462,35 +446,41 @@ export default function EditRolePage() {
                       type="text"
                       id="tipPoolGroupInput"
                       list="pool-groups-list"
-                      placeholder="Select existing or type new..." 
-                      value={configs.find(c => c.tipPoolGroup)?.tipPoolGroup || ''}
+                      placeholder="Select existing or type new..."
+                      value={configs.find((c) => c.tipPoolGroup)?.tipPoolGroup || ''}
                       onChange={(e) => {
-                        const poolName = e.target.value.trim() ? e.target.value.trim() : null;
-                        const updatedConfigs = configs.map(c => ({ ...c, tipPoolGroup: poolName }));
+                        const poolName = e.target.value.trim() ? e.target.value.trim() : null
+                        const updatedConfigs = configs.map((c) => ({ ...c, tipPoolGroup: poolName }))
                         if (updatedConfigs.length === 0 && poolName !== null) {
-                           setConfigs([{ 
-                             tipoutType: '', percentageRate: 0,
-                             effectiveFrom: new Date().toISOString().split('T')[0], effectiveTo: null,
-                             receivesTipout: false, paysTipout: false, distributionGroup: null,
-                             tipPoolGroup: poolName
-                           }]);
-                         } else if (configs.length > 0) {
-                           setConfigs(updatedConfigs);
-                         } else {
-                             setConfigs([]);
-                         }
+                          setConfigs([
+                            {
+                              tipoutType: '',
+                              percentageRate: 0,
+                              effectiveFrom: new Date().toISOString().split('T')[0],
+                              effectiveTo: null,
+                              receivesTipout: false,
+                              paysTipout: false,
+                              distributionGroup: null,
+                              tipPoolGroup: poolName,
+                            },
+                          ])
+                        } else if (configs.length > 0) {
+                          setConfigs(updatedConfigs)
+                        } else {
+                          setConfigs([])
+                        }
                       }}
                       className="block w-full sm:w-1/2 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white px-3 py-2"
                     />
                     <datalist id="pool-groups-list">
-                      {existingPoolGroups.map(group => (
+                      {existingPoolGroups.map((group) => (
                         <option key={group} value={group} />
                       ))}
                     </datalist>
                   </div>
-                   <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                     Start typing to see existing groups or enter a new name. Leave blank for no pooling.
-                   </p>
+                  <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                    Start typing to see existing groups or enter a new name. Leave blank for no pooling.
+                  </p>
                 </div>
               </div>
 
@@ -535,4 +525,4 @@ export default function EditRolePage() {
       </form>
     </div>
   )
-} 
+}

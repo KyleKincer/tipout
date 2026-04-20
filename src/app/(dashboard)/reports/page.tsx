@@ -1,9 +1,12 @@
 'use client'
 
-import { useState, useEffect, useCallback, Suspense } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { format } from 'date-fns'
 import Link from 'next/link'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
+import { useQuery } from 'convex/react'
+import { api } from '../../../../convex/_generated/api'
+import type { Id } from '../../../../convex/_generated/dataModel'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import {
   Chart as ChartJS,
@@ -51,13 +54,6 @@ function ReportsContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const pathname = usePathname()
-  const [employees, setEmployees] = useState<Employee[]>([])
-  // State for the processed report data fetched from the API
-  const [reportData, setReportData] = useState<ReportData | null>(null);
-  // Removed allShiftsData and filteredShifts state
-  const [isLoading, setIsLoading] = useState(true) // Main loading for initial fetch
-  const [isFilterLoading, setIsFilterLoading] = useState(false) // Loading for subsequent filter changes
-  const [error, setError] = useState<string | null>(null)
   const [isDateRange, setIsDateRange] = useState(() => {
       const start = searchParams.get('startDate');
       const end = searchParams.get('endDate');
@@ -76,6 +72,19 @@ function ReportsContent() {
   const [groupByEmployee, setGroupByEmployee] = useState(true)
   const [showPoolSummaries, setShowPoolSummaries] = useState(false)
 
+  const employeesData = useQuery(api.employees.list)
+  const employees: Employee[] = (employeesData ?? []).map((e) => ({ id: e.id, name: e.name }))
+
+  const reportData = useQuery(api.reports.get, {
+    startDate: filters.startDate,
+    endDate: isDateRange ? filters.endDate : filters.startDate,
+    employeeId: filters.employeeId ? (filters.employeeId as Id<'employees'>) : undefined,
+  })
+
+  const isLoading = reportData === undefined
+  const isFilterLoading = reportData === undefined
+  const error: string | null = null
+
   // Update filters when search params change (e.g., back/forward navigation)
   useEffect(() => {
     const start = searchParams.get('startDate') || format(new Date(), 'yyyy-MM-dd');
@@ -87,75 +96,15 @@ function ReportsContent() {
     })
   }, [searchParams])
 
-  // Function to fetch processed report data from the new API endpoint
-  const fetchReportData = useCallback(async (currentFilters: typeof filters, rangeEnabled: boolean) => {
-    setIsFilterLoading(true);
-    setError(null);
-    try {
-        const queryParams = new URLSearchParams({
-            startDate: currentFilters.startDate,
-            // Use start date as end date if not in range mode
-            endDate: rangeEnabled ? currentFilters.endDate : currentFilters.startDate,
-            // We don't need to pass employeeId here, filtering happens client-side if needed
-            // Or the API could handle it if preferred, but client-side is fine for display toggle
-        });
-
-        const response = await fetch(`/api/reports?${queryParams}`);
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({ message: 'Failed to fetch report data' }));
-            throw new Error(errorData.message || 'Failed to fetch report data');
-        }
-        const data: ReportData = await response.json();
-        setReportData(data);
-    } catch (err: unknown) {
-        // Type guard for Error objects
-        if (err instanceof Error) {
-            setError(err.message || 'Failed to load report data');
-        } else {
-            setError('An unknown error occurred while fetching report data');
-        }
-        setReportData(null); // Clear data on error
-        console.error('Error loading report data:', err);
-    } finally {
-        setIsLoading(false); // Turn off initial load indicator once first fetch attempt completes
-        setIsFilterLoading(false);
-    }
-}, []); // No dependencies, relies on passed-in filters
-
-  // Fetch employees for the filter dropdown (only once on mount)
+  // Update URL to reflect current filters
   useEffect(() => {
-    fetchEmployees();
-  }, []);
-
-  // Fetch report data when filters or date range mode change
-  useEffect(() => {
-    fetchReportData(filters, isDateRange);
-
-    // Update URL to reflect current filters
     const params = new URLSearchParams()
     if (filters.startDate) params.set('startDate', filters.startDate)
     if (filters.endDate && (isDateRange || filters.startDate !== filters.endDate)) params.set('endDate', filters.endDate)
     if (filters.employeeId) params.set('employeeId', filters.employeeId)
     const newUrl = `${pathname}${params.toString() ? `?${params.toString()}` : ''}`
-    // Use replace instead of push to avoid polluting browser history on every filter change
     router.replace(newUrl, { scroll: false });
-
-  }, [filters, isDateRange, pathname, router, fetchReportData]);
-
-  const fetchEmployees = async () => {
-    // This remains the same, fetching the list for the dropdown
-    try {
-      const response = await fetch('/api/employees')
-      if (!response.ok) {
-        throw new Error('Failed to fetch employees')
-      }
-      const data = await response.json()
-      setEmployees(data)
-    } catch (err) {
-      // Non-critical error, maybe just log it
-      console.error('Error loading employees for filter:', err)
-    }
-  }
+  }, [filters, isDateRange, pathname, router]);
 
   // Removed calculateSummary and calculateEmployeeRoleSummaries functions
   // Calculations are now done on the server via the API route
@@ -588,7 +537,8 @@ function ReportsContent() {
     if (!summaries || summaries.length === 0) return <div className="text-center text-gray-500">No employee data</div>;
 
     // Get roleConfigs from reportData
-    const roleConfigs = reportData?.roleConfigs || {};
+    const roleConfigs: Record<string, { barTipout: number; hostTipout: number; sa: number }> =
+      reportData?.roleConfigs ?? {};
     
     // Get the roles in a sorted array
     const roles = Object.keys(roleConfigs).sort();

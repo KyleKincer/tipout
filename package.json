@@ -21,6 +21,7 @@
     "@vercel/analytics": "^1.5.0",
     "@vercel/speed-insights": "^1.2.0",
     "chart.js": "^4.4.8",
+    "convex": "^1.35.1",
     "date-fns": "^4.1.0",
     "framer-motion": "^12.6.0",
     "next": "15.2.8",

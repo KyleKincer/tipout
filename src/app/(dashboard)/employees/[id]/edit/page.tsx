@@ -2,69 +2,52 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import LoadingSpinner from '@/components/LoadingSpinner'
+import { useMutation, useQuery } from 'convex/react'
 import { use } from 'react'
 import { XCircleIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline'
+import { api } from '../../../../../../convex/_generated/api'
+import type { Id } from '../../../../../../convex/_generated/dataModel'
 
-type Role = {
-  id: string
-  name: string
-}
-
-type Employee = {
-  id: string
+type EmployeeFormState = {
+  id: Id<'employees'>
   name: string
   active: boolean
-  defaultRoleId: string | null
+  defaultRoleId: Id<'roles'> | null
 }
 
 export default function EditEmployeePage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter()
-  const [employee, setEmployee] = useState<Employee | null>(null)
-  const [roles, setRoles] = useState<Role[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  const { id } = use(params)
+  const employeeId = id as Id<'employees'>
+
+  const employeeData = useQuery(api.employees.get, { id: employeeId })
+  const roles = useQuery(api.roles.list)
+  const updateEmployee = useMutation(api.employees.update)
+
+  const [employee, setEmployee] = useState<EmployeeFormState | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const { id } = use(params)
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [employeeRes, rolesRes] = await Promise.all([
-          fetch(`/api/employees/${id}`),
-          fetch('/api/roles')
-        ])
-
-        if (!employeeRes.ok || !rolesRes.ok) {
-          throw new Error('Failed to fetch data')
-        }
-
-        const [employeeData, rolesData] = await Promise.all([
-          employeeRes.json(),
-          rolesRes.json()
-        ])
-
-        setEmployee(employeeData)
-        setRoles(rolesData)
-      } catch (err) {
-        setError('Failed to load data')
-        console.error('Error loading data:', err)
-      } finally {
-        setIsLoading(false)
-      }
+    if (employeeData) {
+      setEmployee({
+        id: employeeData.id,
+        name: employeeData.name,
+        active: employeeData.active,
+        defaultRoleId: employeeData.defaultRoleId,
+      })
     }
+  }, [employeeData])
 
-    fetchData()
-  }, [id])
-
-  const handleInputChange = (field: keyof Employee, value: string | boolean | null) => {
+  const handleInputChange = (field: keyof EmployeeFormState, value: string | boolean | null) => {
     if (!employee) return
 
     setEmployee({
       id: employee.id,
-      name: field === 'name' ? value as string : employee.name,
-      active: field === 'active' ? value as boolean : employee.active,
-      defaultRoleId: field === 'defaultRoleId' ? value as string | null : employee.defaultRoleId
+      name: field === 'name' ? (value as string) : employee.name,
+      active: field === 'active' ? (value as boolean) : employee.active,
+      defaultRoleId:
+        field === 'defaultRoleId' ? (value as Id<'roles'> | null) : employee.defaultRoleId,
     })
   }
 
@@ -74,21 +57,12 @@ export default function EditEmployeePage({ params }: { params: Promise<{ id: str
 
     setIsSubmitting(true)
     try {
-      const response = await fetch(`/api/employees/${employee.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          name: employee.name,
-          active: employee.active,
-          defaultRoleId: employee.defaultRoleId,
-        }),
+      await updateEmployee({
+        id: employee.id,
+        name: employee.name,
+        active: employee.active,
+        defaultRoleId: employee.defaultRoleId,
       })
-
-      if (!response.ok) {
-        throw new Error('Failed to update employee')
-      }
 
       router.push('/employees')
       router.refresh()
@@ -99,6 +73,8 @@ export default function EditEmployeePage({ params }: { params: Promise<{ id: str
       setIsSubmitting(false)
     }
   }
+
+  const isLoading = employeeData === undefined || roles === undefined
 
   return (
     <div className="px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
@@ -126,7 +102,7 @@ export default function EditEmployeePage({ params }: { params: Promise<{ id: str
             </div>
           </div>
         </div>
-      ) : !employee ? (
+      ) : !employee || employeeData === null ? (
         <div className="mt-8 rounded-md bg-yellow-50 dark:bg-yellow-900/50 p-4">
           <div className="flex">
             <div className="flex-shrink-0">
@@ -188,7 +164,12 @@ export default function EditEmployeePage({ params }: { params: Promise<{ id: str
                       name="defaultRole"
                       id="defaultRole"
                       value={employee.defaultRoleId || ''}
-                      onChange={(e) => handleInputChange('defaultRoleId', e.target.value || null)}
+                      onChange={(e) =>
+                        handleInputChange(
+                          'defaultRoleId',
+                          e.target.value ? (e.target.value as Id<'roles'>) : null,
+                        )
+                      }
                       className="block w-full rounded-md border-gray-300 shadow-sm px-3 py-2 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white"
                     >
                       <option value="">No default role</option>
@@ -216,4 +197,4 @@ export default function EditEmployeePage({ params }: { params: Promise<{ id: str
       )}
     </div>
   )
-} 
+}

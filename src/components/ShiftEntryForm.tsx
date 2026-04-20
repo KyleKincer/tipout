@@ -3,25 +3,13 @@
 import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { format } from 'date-fns'
+import { useMutation, useQuery } from 'convex/react'
+import type { FunctionReturnType } from 'convex/server'
+import { api } from '../../convex/_generated/api'
+import type { Id } from '../../convex/_generated/dataModel'
 import LoadingSpinner from '@/components/LoadingSpinner'
 
-type Employee = {
-  id: string
-  name: string
-  defaultRoleId: string | null
-}
-
-type RoleConfiguration = {
-  tipoutType: string
-  percentageRate: number
-  paysTipout: boolean
-}
-
-type Role = {
-  id: string
-  name: string
-  configs: RoleConfiguration[]
-}
+type Role = FunctionReturnType<typeof api.roles.list>[number]
 
 type ShiftFormData = {
   employeeId: string
@@ -39,9 +27,10 @@ type ShiftEntryFormProps = {
 }
 
 export default function ShiftEntryForm({ initialData, onSubmit }: ShiftEntryFormProps) {
-  const [employees, setEmployees] = useState<Employee[]>([])
-  const [roles, setRoles] = useState<Role[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  const employees = useQuery(api.employees.list)
+  const roles = useQuery(api.roles.list)
+  const createShift = useMutation(api.shifts.create)
+
   const [error, setError] = useState<string | null>(null)
   const [selectedRole, setSelectedRole] = useState<Role | null>(null)
 
@@ -66,7 +55,7 @@ export default function ShiftEntryForm({ initialData, onSubmit }: ShiftEntryForm
 
   // Update selectedRole when roleId changes
   useEffect(() => {
-    if (roleId) {
+    if (roleId && roles) {
       const role = roles.find(r => r.id === roleId)
       setSelectedRole(role || null)
     } else {
@@ -76,7 +65,7 @@ export default function ShiftEntryForm({ initialData, onSubmit }: ShiftEntryForm
 
   // Set default role when employee is selected
   useEffect(() => {
-    if (employeeId) {
+    if (employeeId && employees) {
       const employee = employees.find(e => e.id === employeeId)
       if (employee?.defaultRoleId) {
         setValue('roleId', employee.defaultRoleId)
@@ -86,67 +75,33 @@ export default function ShiftEntryForm({ initialData, onSubmit }: ShiftEntryForm
     }
   }, [employeeId, employees, setValue])
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [employeesRes, rolesRes] = await Promise.all([
-          fetch('/api/employees'),
-          fetch('/api/roles'),
-        ])
-
-        if (!employeesRes.ok || !rolesRes.ok) {
-          throw new Error('Failed to fetch data')
-        }
-
-        const [employeesData, rolesData] = await Promise.all([
-          employeesRes.json(),
-          rolesRes.json(),
-        ])
-
-        setEmployees(employeesData)
-        setRoles(rolesData)
-      } catch (err) {
-        setError('Failed to load form data')
-        console.error('Error loading form data:', err)
-      } finally {
-        setIsLoading(false)
-      }
-    }
-
-    fetchData()
-  }, [])
-
   const handleFormSubmit = async (data: ShiftFormData) => {
     setIsSubmitting(true)
     try {
       if (onSubmit) {
         await onSubmit(data)
       } else {
-        const response = await fetch('/api/shifts', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(data),
+        const result = await createShift({
+          employeeId: data.employeeId as Id<'employees'>,
+          roleId: data.roleId as Id<'roles'>,
+          date: data.date,
+          hours: Number(data.hours),
+          cashTips: Number(data.cashTips) || 0,
+          creditTips: Number(data.creditTips) || 0,
+          liquorSales: Number(data.liquorSales) || 0,
         })
-
-        if (!response.ok) {
-          throw new Error('Failed to save shift')
-        }
-
-        const result = await response.json()
         console.log('Shift saved:', result)
         reset()
       }
-    } catch (error) {
-      console.error('Error submitting shift:', error)
+    } catch (err) {
+      console.error('Error submitting shift:', err)
       setError('Failed to save shift')
     } finally {
       setIsSubmitting(false)
     }
   }
 
-  if (isLoading) {
+  if (employees === undefined || roles === undefined) {
     return <LoadingSpinner />
   }
 
@@ -161,11 +116,11 @@ export default function ShiftEntryForm({ initialData, onSubmit }: ShiftEntryForm
     switch (field) {
       case 'cashTips':
       case 'creditTips':
-        return selectedRole.configs.some(config => 
+        return selectedRole.configs.some(config =>
           (config.tipoutType === 'host' || config.tipoutType === 'sa') && config.paysTipout
         )
       case 'liquorSales':
-        return selectedRole.configs.some(config => 
+        return selectedRole.configs.some(config =>
           config.tipoutType === 'bar' && config.paysTipout
         )
       case 'hours':
@@ -178,7 +133,7 @@ export default function ShiftEntryForm({ initialData, onSubmit }: ShiftEntryForm
   // Helper function to get field description
   const getFieldDescription = (field: keyof ShiftFormData) => {
     if (!selectedRole) return 'Select a role to see field requirements'
-    
+
     switch (field) {
       case 'cashTips':
       case 'creditTips':
@@ -311,8 +266,8 @@ export default function ShiftEntryForm({ initialData, onSubmit }: ShiftEntryForm
                     id="liquorSales"
                     disabled={!isFieldRequired('liquorSales')}
                     className={`block w-full rounded-md shadow-sm px-3 py-2 sm:text-sm ${
-                      !isFieldRequired('liquorSales') 
-                      ? 'bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed opacity-60' 
+                      !isFieldRequired('liquorSales')
+                      ? 'bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed opacity-60'
                       : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-[var(--foreground)] focus:border-indigo-500 focus:ring-indigo-500'
                     }`}
                   />
@@ -344,8 +299,8 @@ export default function ShiftEntryForm({ initialData, onSubmit }: ShiftEntryForm
                     id="cashTips"
                     disabled={!isFieldRequired('cashTips')}
                     className={`block w-full rounded-md shadow-sm px-3 py-2 sm:text-sm ${
-                      !isFieldRequired('cashTips') 
-                      ? 'bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed opacity-60' 
+                      !isFieldRequired('cashTips')
+                      ? 'bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed opacity-60'
                       : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-[var(--foreground)] focus:border-indigo-500 focus:ring-indigo-500'
                     }`}
                   />
@@ -371,8 +326,8 @@ export default function ShiftEntryForm({ initialData, onSubmit }: ShiftEntryForm
                     id="creditTips"
                     disabled={!isFieldRequired('creditTips')}
                     className={`block w-full rounded-md shadow-sm px-3 py-2 sm:text-sm ${
-                      !isFieldRequired('creditTips') 
-                      ? 'bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed opacity-60' 
+                      !isFieldRequired('creditTips')
+                      ? 'bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed opacity-60'
                       : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-[var(--foreground)] focus:border-indigo-500 focus:ring-indigo-500'
                     }`}
                   />
@@ -405,4 +360,4 @@ export default function ShiftEntryForm({ initialData, onSubmit }: ShiftEntryForm
       </div>
     </form>
   )
-} 
+}

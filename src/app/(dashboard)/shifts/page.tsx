@@ -4,37 +4,62 @@ import { useEffect, useState, Suspense } from 'react'
 import { format } from 'date-fns'
 import Link from 'next/link'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
+import { useMutation, useQuery } from 'convex/react'
+import type { FunctionReturnType } from 'convex/server'
+import { api } from '../../../../convex/_generated/api'
+import type { Id } from '../../../../convex/_generated/dataModel'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import { AdminOnly } from '@/components/RoleBasedUI'
-import { calculateTipouts, roleReceivesTipoutType } from '@/utils/tipoutCalculations'
+import { calculateTipouts, roleReceivesTipoutType } from '@/lib/tipoutCalculations'
 
-type Employee = {
+type Shift = FunctionReturnType<typeof api.shifts.list>[number]
+
+// The calculators under src/lib expect configs where `distributionGroup` / `tipPoolGroup`
+// are `string | undefined`; Convex returns `string | null`. Adapt without casts.
+type CalcConfig = {
   id: string
-  name: string
+  tipoutType: string
+  percentageRate: number
+  effectiveFrom: string
+  effectiveTo: string | null
+  paysTipout?: boolean
+  receivesTipout?: boolean
+  distributionGroup?: string
 }
-
-type Role = {
-  id: string
-  name: string
-  basePayRate: number
-  configs: {
-    id: string
-    tipoutType: string
-    percentageRate: number
-    effectiveFrom: string
-    effectiveTo: string | null
-  }[]
-}
-
-type Shift = {
+type CalcShift = {
   id: string
   date: string
-  employee: Employee
-  role: Role
   hours: number
   cashTips: number
   creditTips: number
   liquorSales: number
+  employee: { id: string; name: string }
+  role: { name: string; basePayRate: number; configs: CalcConfig[] }
+}
+function toCalcShift(shift: Shift): CalcShift {
+  return {
+    id: shift.id,
+    date: shift.date,
+    hours: shift.hours,
+    cashTips: shift.cashTips,
+    creditTips: shift.creditTips,
+    liquorSales: shift.liquorSales,
+    employee: { id: shift.employee.id, name: shift.employee.name },
+    role: {
+      name: shift.role.name,
+      basePayRate: shift.role.basePayRate,
+      configs: shift.role.configs.map((c) => ({
+        id: c.id,
+        tipoutType: c.tipoutType,
+        percentageRate: c.percentageRate,
+        effectiveFrom: c.effectiveFrom,
+        effectiveTo: c.effectiveTo,
+        paysTipout: c.paysTipout,
+        receivesTipout: c.receivesTipout,
+        distributionGroup: c.distributionGroup ?? undefined,
+      })),
+    },
+  }
 }
 
 // Create a new client component for the shifts content
@@ -42,10 +67,7 @@ function ShiftsContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const pathname = usePathname()
-  const [shifts, setShifts] = useState<Shift[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [isFilterLoading, setIsFilterLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+
   const [isDateRange, setIsDateRange] = useState(false)
   const [filters, setFilters] = useState(() => {
     return {
@@ -55,6 +77,19 @@ function ShiftsContent() {
       role: searchParams.get('role') || '',
     }
   })
+  // Build query args matching the legacy URL-param contract.
+  const queryArgs: {
+    startDate?: string
+    endDate?: string
+    employeeId?: Id<'employees'>
+    role?: string
+  } = { startDate: filters.startDate }
+  if (isDateRange) queryArgs.endDate = filters.endDate
+  if (filters.employeeId) queryArgs.employeeId = filters.employeeId as Id<'employees'>
+  if (filters.role) queryArgs.role = filters.role
+
+  const shifts = useQuery(api.shifts.list, queryArgs)
+  const removeShift = useMutation(api.shifts.remove)
 
   // Update filters when search params change
   useEffect(() => {
@@ -69,7 +104,7 @@ function ShiftsContent() {
   // Update URL when filters change
   useEffect(() => {
     const params = new URLSearchParams()
-    
+
     if (filters.startDate) params.set('startDate', filters.startDate)
     if (isDateRange && filters.endDate) params.set('endDate', filters.endDate)
     if (filters.employeeId) params.set('employeeId', filters.employeeId)
@@ -79,55 +114,21 @@ function ShiftsContent() {
     router.push(newUrl)
   }, [filters, pathname, router, isDateRange])
 
-  const fetchShifts = async () => {
-    try {
-      setIsFilterLoading(true)
-      const queryParams = new URLSearchParams({
-        startDate: filters.startDate,
-        ...(isDateRange && { endDate: filters.endDate }),
-        ...(filters.employeeId && { employeeId: filters.employeeId }),
-        ...(filters.role && { role: filters.role }),
-      })
-
-      const response = await fetch(`/api/shifts?${queryParams}`)
-      if (!response.ok) {
-        throw new Error('Failed to fetch shifts')
-      }
-      const data = await response.json()
-      setShifts(data)
-    } catch (err) {
-      setError('Failed to load shifts')
-      console.error('Error loading shifts:', err)
-    } finally {
-      setIsLoading(false)
-      setIsFilterLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    fetchShifts()
-  }, [filters])
-
-  const handleDelete = async (shiftId: string) => {
+  const handleDelete = async (shiftId: Id<'shifts'>) => {
     if (!confirm('Are you sure you want to delete this shift?')) {
       return
     }
 
     try {
-      const response = await fetch(`/api/shifts/${shiftId}`, {
-        method: 'DELETE',
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to delete shift')
-      }
-
-      // Refresh the shifts list
-      fetchShifts()
+      await removeShift({ id: shiftId })
     } catch (err) {
       console.error('Error deleting shift:', err)
       alert('Failed to delete shift')
     }
+  }
+
+  if (shifts === undefined) {
+    return <LoadingSpinner />
   }
 
   // Group shifts by date to determine if hosts/SAs worked each day
@@ -143,14 +144,6 @@ function ShiftsContent() {
     acc[dateStr].push(shift)
     return acc
   }, {} as Record<string, Shift[]>)
-
-  if (isLoading) {
-    return <LoadingSpinner />
-  }
-
-  if (error) {
-    return <div className="text-red-600">{error}</div>
-  }
 
   return (
     <div className="px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
@@ -206,7 +199,6 @@ function ShiftsContent() {
                       id="startDate"
                       value={filters.startDate}
                       onChange={(e) => setFilters({ ...filters, startDate: e.target.value })}
-                      disabled={isFilterLoading}
                       className="block w-full rounded-md border-gray-300 shadow-sm px-3 py-2 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed"
                     />
                   </div>
@@ -223,7 +215,6 @@ function ShiftsContent() {
                         id="endDate"
                         value={filters.endDate}
                         onChange={(e) => setFilters({ ...filters, endDate: e.target.value })}
-                        disabled={isFilterLoading}
                         className="block w-full rounded-md border-gray-300 shadow-sm px-3 py-2 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed"
                       />
                     </div>
@@ -239,15 +230,14 @@ function ShiftsContent() {
                       id="employeeId"
                       value={filters.employeeId}
                       onChange={(e) => setFilters({ ...filters, employeeId: e.target.value })}
-                      disabled={isFilterLoading}
                       className="block w-full rounded-md border-gray-300 shadow-sm px-3 py-2 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <option value="">all employees</option>
                       {Object.values(
                         shifts.reduce((acc, shift) => {
-                          acc[shift.employee.id] = shift.employee;
-                          return acc;
-                        }, {} as Record<string, Employee>)
+                          acc[shift.employee.id] = shift.employee
+                          return acc
+                        }, {} as Record<string, Shift['employee']>)
                       ).map((employee) => (
                         <option key={employee.id} value={employee.id}>
                           {employee.name}
@@ -266,14 +256,13 @@ function ShiftsContent() {
                       id="role"
                       value={filters.role}
                       onChange={(e) => setFilters({ ...filters, role: e.target.value })}
-                      disabled={isFilterLoading}
                       className="block w-full rounded-md border-gray-300 shadow-sm px-3 py-2 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <option value="">all roles</option>
                       {Object.values(
                         shifts.reduce((acc, shift) => {
-                          acc[shift.role.name] = shift.role.name;
-                          return acc;
+                          acc[shift.role.name] = shift.role.name
+                          return acc
                         }, {} as Record<string, string>)
                       ).map((roleName) => (
                         <option key={roleName} value={roleName}>
@@ -289,11 +278,7 @@ function ShiftsContent() {
         </div>
       </div>
 
-      {isFilterLoading ? (
-        <div className="mt-8 flex justify-center">
-          <LoadingSpinner />
-        </div>
-      ) : shifts.length === 0 ? (
+      {shifts.length === 0 ? (
         <div className="mt-8 bg-white/50 dark:bg-gray-800/50 shadow sm:rounded-lg border border-gray-200 dark:border-gray-700 p-8">
           <div className="text-center">
             <svg
@@ -379,13 +364,13 @@ function ShiftsContent() {
                   date.setMinutes(date.getMinutes() + date.getTimezoneOffset())
                   const dateStr = format(date, 'yyyy-MM-dd')
                   const dayShifts = shiftsByDate[dateStr]
-                  
+
                   // Check for role types based on role configurations rather than name matching
-                  const hasHost = dayShifts.some(s => roleReceivesTipoutType(s, 'host'))
-                  const hasSA = dayShifts.some(s => roleReceivesTipoutType(s, 'sa'))
-                  const hasBar = dayShifts.some(s => roleReceivesTipoutType(s, 'bar'))
-                  
-                  const { barTipout, hostTipout, saTipout } = calculateTipouts(shift, hasHost, hasSA, hasBar)
+                  const hasHost = dayShifts.some((s) => roleReceivesTipoutType(toCalcShift(s), 'host'))
+                  const hasSA = dayShifts.some((s) => roleReceivesTipoutType(toCalcShift(s), 'sa'))
+                  const hasBar = dayShifts.some((s) => roleReceivesTipoutType(toCalcShift(s), 'bar'))
+
+                  const { barTipout, hostTipout, saTipout } = calculateTipouts(toCalcShift(shift), hasHost, hasSA, hasBar)
 
                   return (
                     <tr key={shift.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
@@ -454,4 +439,4 @@ export default function ShiftsPage() {
       <ShiftsContent />
     </Suspense>
   )
-} 
+}

@@ -303,7 +303,6 @@ export const calculateEmployeeRoleSummariesDaily = (shiftsToProcess: Shift[]): E
         pool.shifts.forEach(shift => {
           shift.cashTips = Number(shift.hours) * netPoolCashRate; // NET cash share
           shift.creditTips = Number(shift.hours) * netPoolCreditRate; // NET credit share (after pool deductions)
-          console.log(`Shift ${shift.id} (${shift.role?.name}) NET adjusted tips: Cash=$${shift.cashTips.toFixed(2)}, Credit=$${shift.creditTips.toFixed(2)} from NET pool rate`);
         });
       } else {
          pool.shifts.forEach(shift => {
@@ -398,11 +397,9 @@ export const calculateEmployeeRoleSummariesDaily = (shiftsToProcess: Shift[]): E
       if (isInPool) {
         // Payroll Tips for pooled = Net Pooled Credit Share + Received Tipouts - Paid Bar Tipout (Host/SA handled by pool)
         payrollTips = shift.creditTips + receivedBar + receivedHost + receivedSA - paidBar; // Use adjusted shift.creditTips
-         console.log(`Pooled Shift ${shift.id} Payroll: ${shift.creditTips.toFixed(2)} (Net Pool) + ${receivedBar.toFixed(2)} (Rec Bar) + ${receivedHost.toFixed(2)} (Rec Host) + ${receivedSA.toFixed(2)} (Rec SA) - ${paidBar.toFixed(2)} (Paid Bar) = ${payrollTips.toFixed(2)}`);
       } else {
         // Payroll Tips for non-pooled = Original Credit Tips + Received Tipouts - Paid Tipouts
         payrollTips = shift.originalCreditTips + receivedBar + receivedHost + receivedSA - paidBar - paidHost - paidSA;
-        console.log(`Non-Pooled Shift ${shift.id} Payroll: ${shift.originalCreditTips.toFixed(2)} (Orig) + ${receivedBar.toFixed(2)} (Rec Bar) + ${receivedHost.toFixed(2)} (Rec Host) + ${receivedSA.toFixed(2)} (Rec SA) - ${paidBar.toFixed(2)} (Paid Bar) - ${paidHost.toFixed(2)} (Paid Host) - ${paidSA.toFixed(2)} (Paid SA) = ${payrollTips.toFixed(2)}`);
 
         // Use original tips for the base cash/credit display if not pooled
         shift.cashTips = shift.originalCashTips;

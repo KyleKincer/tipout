@@ -1,72 +1,33 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { PlusIcon, TrashIcon } from '@heroicons/react/24/outline'
+import { useState } from 'react'
+import { PlusIcon } from '@heroicons/react/24/outline'
 import Link from 'next/link'
+import { useMutation, useQuery } from 'convex/react'
+import type { FunctionReturnType } from 'convex/server'
+import { api } from '../../../../convex/_generated/api'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import { AdminOnly } from '@/components/RoleBasedUI'
 
-type Role = {
-  id: string
-  name: string
-}
-
-type Employee = {
-  id: string
-  name: string
-  active: boolean
-  defaultRoleId: string | null
-  defaultRole?: Role
-}
+type Employee = FunctionReturnType<typeof api.employees.list>[number]
 
 export default function EmployeesPage() {
-  const [employees, setEmployees] = useState<Employee[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  const employees = useQuery(api.employees.list)
+  const createEmployee = useMutation(api.employees.create)
+  const removeEmployee = useMutation(api.employees.remove)
+
   const [error, setError] = useState<string | null>(null)
   const [isAddingEmployee, setIsAddingEmployee] = useState(false)
   const [newEmployeeName, setNewEmployeeName] = useState('')
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [employeeToDelete, setEmployeeToDelete] = useState<Employee | null>(null)
 
-  useEffect(() => {
-    fetchEmployees()
-  }, [])
-
-  const fetchEmployees = async () => {
-    try {
-      const response = await fetch('/api/employees')
-      if (!response.ok) {
-        throw new Error('Failed to fetch employees')
-      }
-      const data = await response.json()
-      setEmployees(data)
-    } catch (err) {
-      setError('Failed to load employees')
-      console.error('Error loading employees:', err)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
   const handleAddEmployee = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!newEmployeeName.trim()) return
 
     try {
-      const response = await fetch('/api/employees', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ name: newEmployeeName.trim() }),
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to add employee')
-      }
-
-      const newEmployee = await response.json()
-      setEmployees([...employees, newEmployee])
+      await createEmployee({ name: newEmployeeName.trim() })
       setNewEmployeeName('')
       setIsAddingEmployee(false)
     } catch (err) {
@@ -79,15 +40,7 @@ export default function EmployeesPage() {
     if (!employeeToDelete) return
 
     try {
-      const response = await fetch(`/api/employees/${employeeToDelete.id}`, {
-        method: 'DELETE',
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to delete employee')
-      }
-
-      setEmployees(employees.filter(emp => emp.id !== employeeToDelete.id))
+      await removeEmployee({ id: employeeToDelete.id })
       setShowDeleteConfirm(false)
       setEmployeeToDelete(null)
     } catch (err) {
@@ -96,7 +49,7 @@ export default function EmployeesPage() {
     }
   }
 
-  if (isLoading) {
+  if (employees === undefined) {
     return <LoadingSpinner />
   }
 

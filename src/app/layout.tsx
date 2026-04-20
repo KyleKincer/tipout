@@ -2,6 +2,7 @@ import { ClerkProvider } from '@clerk/nextjs'
 import { dark } from '@clerk/themes'
 import { SpeedInsights } from '@vercel/speed-insights/next'
 import { Analytics } from "@vercel/analytics/react"
+import { ConvexClientProvider } from './ConvexClientProvider'
 import './globals.css'
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
@@ -20,15 +21,17 @@ export default function RootLayout({
 }) {
   return (
     <ClerkProvider appearance={{ baseTheme: dark }}>
-      <SpeedInsights />
-      <Analytics />
-      <html lang="en" className="h-full">
-        <body className={`${inter.className} h-full bg-[var(--background)] text-[var(--foreground)]`}>
-          <div className="min-h-full">
-            {children}
-          </div>
-        </body>
-      </html>
+      <ConvexClientProvider>
+        <SpeedInsights />
+        <Analytics />
+        <html lang="en" className="h-full">
+          <body className={`${inter.className} h-full bg-[var(--background)] text-[var(--foreground)]`}>
+            <div className="min-h-full">
+              {children}
+            </div>
+          </body>
+        </html>
+      </ConvexClientProvider>
     </ClerkProvider>
   )
 }

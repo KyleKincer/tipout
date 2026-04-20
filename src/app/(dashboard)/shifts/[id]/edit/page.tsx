@@ -1,30 +1,17 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, use } from 'react'
 import { useRouter } from 'next/navigation'
-import ShiftEntryForm from '@/components/ShiftEntryForm'
+import { useMutation, useQuery } from 'convex/react'
+import type { FunctionReturnType } from 'convex/server'
 import { format } from 'date-fns'
-import { use } from 'react'
+import ShiftEntryForm from '@/components/ShiftEntryForm'
 import LoadingSpinner from '@/components/LoadingSpinner'
-import { calculateTipouts, roleReceivesTipoutType } from '@/utils/tipoutCalculations'
+import { calculateTipouts, roleReceivesTipoutType } from '@/lib/tipoutCalculations'
+import { api } from '../../../../../../convex/_generated/api'
+import type { Id } from '../../../../../../convex/_generated/dataModel'
 
-type Employee = {
-  id: string
-  name: string
-}
-
-type Role = {
-  id: string
-  name: string
-  basePayRate: number
-  configs: {
-    id: string
-    tipoutType: string
-    percentageRate: number
-    effectiveFrom: string
-    effectiveTo: string | null
-  }[]
-}
+type ShiftDoc = NonNullable<FunctionReturnType<typeof api.shifts.get>>
 
 type ShiftFormData = {
   employeeId: string
@@ -36,20 +23,79 @@ type ShiftFormData = {
   liquorSales: number
 }
 
-type Shift = ShiftFormData & {
+// The calculators under src/lib expect configs where `distributionGroup` is
+// `string | undefined`; Convex returns `string | null`. Adapt without casts.
+type CalcConfig = {
   id: string
-  employee?: Employee
-  role?: Role
+  tipoutType: string
+  percentageRate: number
+  effectiveFrom: string
+  effectiveTo: string | null
+  paysTipout?: boolean
+  receivesTipout?: boolean
+  distributionGroup?: string
+}
+type CalcShift = {
+  id: string
+  date: string
+  hours: number
+  cashTips: number
+  creditTips: number
+  liquorSales: number
+  employee: { id: string; name: string }
+  role: { name: string; basePayRate: number; configs: CalcConfig[] }
+}
+function toCalcShift(shift: ShiftDoc): CalcShift {
+  return {
+    id: shift.id,
+    date: shift.date,
+    hours: shift.hours,
+    cashTips: shift.cashTips,
+    creditTips: shift.creditTips,
+    liquorSales: shift.liquorSales,
+    employee: { id: shift.employee.id, name: shift.employee.name },
+    role: {
+      name: shift.role.name,
+      basePayRate: shift.role.basePayRate,
+      configs: shift.role.configs.map((c) => ({
+        id: c.id,
+        tipoutType: c.tipoutType,
+        percentageRate: c.percentageRate,
+        effectiveFrom: c.effectiveFrom,
+        effectiveTo: c.effectiveTo,
+        paysTipout: c.paysTipout,
+        receivesTipout: c.receivesTipout,
+        distributionGroup: c.distributionGroup ?? undefined,
+      })),
+    },
+  }
 }
 
 export default function EditShiftPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params)
   const router = useRouter()
-  const [shift, setShift] = useState<Shift | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
+  const shiftId = resolvedParams.id as Id<'shifts'>
+
+  const shiftData = useQuery(api.shifts.get, { id: shiftId })
+
+  // Determine the local-time date string for the shift to use as the date filter
+  // for same-day shifts. Use 'skip' until we have the shift loaded.
+  const sameDayDateStr: string | null = shiftData
+    ? (() => {
+        const d = new Date(shiftData.date)
+        d.setMinutes(d.getMinutes() + d.getTimezoneOffset())
+        return format(d, 'yyyy-MM-dd')
+      })()
+    : null
+
+  const dayShifts = useQuery(
+    api.shifts.list,
+    sameDayDateStr ? { startDate: sameDayDateStr, endDate: sameDayDateStr } : 'skip',
+  )
+
+  const updateShift = useMutation(api.shifts.update)
+
   const [error, setError] = useState<string | null>(null)
-  const [hasHost, setHasHost] = useState(false)
-  const [hasSA, setHasSA] = useState(false)
   const [isTipoutsExpanded, setIsTipoutsExpanded] = useState(true)
   const [contentHeight, setContentHeight] = useState<number | null>(null)
   const contentRef = useRef<HTMLDivElement>(null)
@@ -60,67 +106,18 @@ export default function EditShiftPage({ params }: { params: Promise<{ id: string
     }
   }, [isTipoutsExpanded])
 
-  useEffect(() => {
-    const fetchShift = async () => {
-      try {
-        // Fetch the shift and all shifts for the same date to determine if hosts/SAs worked
-        const response = await fetch(`/api/shifts/${resolvedParams.id}`)
-        if (!response.ok) {
-          throw new Error('Failed to fetch shift')
-        }
-        const data = await response.json()
-        // Format the date before setting the shift state, handling timezone properly
-        const shiftDate = new Date(data.date)
-        // Add timezone offset to get to local time
-        shiftDate.setMinutes(shiftDate.getMinutes() + shiftDate.getTimezoneOffset())
-        const formattedData = {
-          ...data,
-          date: format(shiftDate, 'yyyy-MM-dd')
-        }
-        setShift(formattedData)
-
-        // Fetch all shifts for the same date
-        const date = format(shiftDate, 'yyyy-MM-dd')
-        const shiftsResponse = await fetch(`/api/shifts?startDate=${date}&endDate=${date}`)
-        if (!shiftsResponse.ok) {
-          throw new Error('Failed to fetch shifts')
-        }
-        const shiftsData = await shiftsResponse.json()
-
-        // Check if hosts/SAs worked that day using role configurations
-        const hasAnyHost = shiftsData.some((s: Shift) => roleReceivesTipoutType(s, 'host'));
-        const hasAnySA = shiftsData.some((s: Shift) => roleReceivesTipoutType(s, 'sa'));
-        
-        console.log('Found hosts/SAs by role configs?', { hasAnyHost, hasAnySA });
-        
-        setHasHost(hasAnyHost);
-        setHasSA(hasAnySA);
-        
-        console.log('Shifts for date:', shiftsData.length, 'shifts found');
-      } catch (err) {
-        setError('Failed to load shift')
-        console.error('Error loading shift:', err)
-      } finally {
-        setIsLoading(false)
-      }
-    }
-
-    fetchShift()
-  }, [resolvedParams.id])
-
   const handleSubmit = async (data: ShiftFormData) => {
     try {
-      const response = await fetch(`/api/shifts/${resolvedParams.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(data),
+      await updateShift({
+        id: shiftId,
+        employeeId: data.employeeId as Id<'employees'>,
+        roleId: data.roleId as Id<'roles'>,
+        date: data.date,
+        hours: Number(data.hours),
+        cashTips: Number(data.cashTips) || 0,
+        creditTips: Number(data.creditTips) || 0,
+        liquorSales: Number(data.liquorSales) || 0,
       })
-
-      if (!response.ok) {
-        throw new Error('Failed to update shift')
-      }
 
       router.push('/shifts')
     } catch (err) {
@@ -129,7 +126,7 @@ export default function EditShiftPage({ params }: { params: Promise<{ id: string
     }
   }
 
-  if (isLoading) {
+  if (shiftData === undefined || dayShifts === undefined) {
     return <LoadingSpinner />
   }
 
@@ -137,44 +134,31 @@ export default function EditShiftPage({ params }: { params: Promise<{ id: string
     return <div className="text-red-600">{error}</div>
   }
 
-  if (!shift) {
+  if (shiftData === null) {
     return <div>Shift not found</div>
   }
 
-  // Check if this shift is a bartender using role configurations
-  const hasBar = roleReceivesTipoutType(shift, 'bar');
+  // Build form initial data (date formatted for <input type="date" />)
+  const shiftDate = new Date(shiftData.date)
+  shiftDate.setMinutes(shiftDate.getMinutes() + shiftDate.getTimezoneOffset())
+  const initialFormData: ShiftFormData = {
+    employeeId: shiftData.employee.id,
+    roleId: shiftData.role.id,
+    date: format(shiftDate, 'yyyy-MM-dd'),
+    hours: shiftData.hours,
+    cashTips: shiftData.cashTips,
+    creditTips: shiftData.creditTips,
+    liquorSales: shiftData.liquorSales,
+  }
 
-  const { barTipout, hostTipout, saTipout } = calculateTipouts(shift, hasHost, hasSA, hasBar)
-  
-  // Debug logging
-  console.log('Final values used for calculation:', { 
-    hasHost, 
-    hasSA,
-    hasBar,
-    role: shift.role?.name,
-    configCount: shift.role?.configs?.length,
-    cashTips: shift.cashTips,
-    creditTips: shift.creditTips,
-    liquorSales: shift.liquorSales
-  });
-  
-  // Check for host tipout config specifically
-  const hasHostTipoutConfig = shift.role?.configs?.some(config => 
-    config.tipoutType === 'host'
-  );
-  
-  console.log('Host tipout configuration check:', {
-    hasHostTipoutConfig,
-    totalTips: Number(shift.cashTips) + Number(shift.creditTips),
-    hostConfigDetails: shift.role?.configs
-      ?.filter(config => config.tipoutType === 'host')
-      ?.map(config => ({
-        percentageRate: config.percentageRate,
-        tipoutType: config.tipoutType
-      }))
-  });
-  
-  console.log('Calculated tipouts:', { barTipout, hostTipout, saTipout });
+  const calcShift = toCalcShift(shiftData)
+
+  // Determine if hosts/SAs worked that day using role configurations
+  const hasHost = dayShifts.some((s) => roleReceivesTipoutType(toCalcShift(s), 'host'))
+  const hasSA = dayShifts.some((s) => roleReceivesTipoutType(toCalcShift(s), 'sa'))
+  const hasBar = roleReceivesTipoutType(calcShift, 'bar')
+
+  const { barTipout, hostTipout, saTipout } = calculateTipouts(calcShift, hasHost, hasSA, hasBar)
 
   return (
     <div className="space-y-6">
@@ -202,11 +186,11 @@ export default function EditShiftPage({ params }: { params: Promise<{ id: string
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
               </svg>
             </button>
-            
-            <div 
+
+            <div
               className={`overflow-hidden transition-[height,opacity] duration-200 ease-in-out ${isTipoutsExpanded ? 'opacity-100' : 'opacity-0'}`}
-              style={{ 
-                height: isTipoutsExpanded ? (contentHeight ?? 'auto') : 0
+              style={{
+                height: isTipoutsExpanded ? (contentHeight ?? 'auto') : 0,
               }}
             >
               <div ref={contentRef} className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 mb-4">
@@ -229,9 +213,9 @@ export default function EditShiftPage({ params }: { params: Promise<{ id: string
       </div>
 
       <ShiftEntryForm
-        initialData={shift}
+        initialData={initialFormData}
         onSubmit={handleSubmit}
       />
     </div>
   )
-} 
+}

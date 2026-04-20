@@ -74,46 +74,28 @@ const findActiveConfig = (shift: Shift, tipoutType: string): RoleConfig | null =
 export const calculateTipouts = (shift: Shift, hasHost: boolean, hasSA: boolean, hasBar: boolean = false): { barTipout: number, hostTipout: number, saTipout: number } => {
   if (!shift.role?.configs) return { barTipout: 0, hostTipout: 0, saTipout: 0 };
 
-  console.log('calculateTipouts input:', { 
-    shiftId: shift.id,
-    role: shift.role.name,
-    configs: shift.role.configs.length,
-    hasHost, 
-    hasSA,
-    hasBar
-  });
-
   const totalTips = Number(shift.cashTips) + Number(shift.creditTips);
   let barTipout = 0;
   let hostTipout = 0;
   let saTipout = 0;
 
-  // Find ACTIVE config for each tipout type
   const activeBarConfig = findActiveConfig(shift, 'bar');
   const activeHostConfig = findActiveConfig(shift, 'host');
   const activeSaConfig = findActiveConfig(shift, 'sa');
 
-  // Calculate Bar Tipout
   if (hasBar && activeBarConfig && activeBarConfig.paysTipout !== false) {
     barTipout = Number(shift.liquorSales) * (activeBarConfig.percentageRate / 100);
-    console.log(`Calculated bar tipout: ${barTipout} using rate ${activeBarConfig.percentageRate}%`);
   }
 
-  // Calculate Host Tipout
   if (hasHost && activeHostConfig && activeHostConfig.paysTipout !== false) {
     hostTipout = totalTips * (activeHostConfig.percentageRate / 100);
-    console.log(`Calculated host tipout: ${hostTipout} using rate ${activeHostConfig.percentageRate}%`);
   }
 
-  // Calculate SA Tipout
   if (hasSA && activeSaConfig && activeSaConfig.paysTipout !== false) {
     saTipout = totalTips * (activeSaConfig.percentageRate / 100);
-    console.log(`Calculated SA tipout: ${saTipout} using rate ${activeSaConfig.percentageRate}%`);
   }
 
-  const result = { barTipout, hostTipout, saTipout };
-  console.log('Final tipout calculation:', result);
-  return result;
+  return { barTipout, hostTipout, saTipout };
 };
 
 /**

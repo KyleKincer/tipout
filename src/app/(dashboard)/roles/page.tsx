@@ -1,90 +1,79 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { PlusIcon, XCircleIcon } from '@heroicons/react/24/outline'
-import { format } from 'date-fns'
+import { useMutation, useQuery } from 'convex/react'
+import type { FunctionReturnType } from 'convex/server'
+import { api } from '../../../../convex/_generated/api'
+import type { Id } from '../../../../convex/_generated/dataModel'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import { AdminOnly } from '@/components/RoleBasedUI'
 
-type Role = {
-  id: string
-  name: string
-  basePayRate: number
-  configs: RoleConfiguration[]
-}
+type Role = FunctionReturnType<typeof api.roles.list>[number]
+type RoleConfig = Role['configs'][number]
+type TipoutType = RoleConfig['tipoutType']
 
-type RoleConfiguration = {
-  id: string
-  tipoutType: string
-  percentageRate: number
-  effectiveFrom: string
-  effectiveTo: string | null
-}
-
-const TIPOUT_TYPES = [
+const TIPOUT_TYPES: { id: TipoutType; name: string; description: string }[] = [
   { id: 'bar', name: 'Bar Tipout', description: 'Percentage of liquor sales' },
   { id: 'host', name: 'Host Tipout', description: 'Percentage of total tips' },
   { id: 'sa', name: 'Server Assistant Tipout', description: 'Percentage of total tips' },
 ]
 
+// Build the payload for replaceForRole based on the role's currently-active configs.
+// Active configs are the ones returned by roles.list (which filters effectiveTo == null server-side).
+type ReplaceConfig = {
+  tipoutType: TipoutType
+  percentageRate: number
+  effectiveFrom: string
+  effectiveTo: string | null
+  receivesTipout: boolean
+  paysTipout: boolean
+  distributionGroup?: string | null
+  tipPoolGroup?: string | null
+}
+
+function configsToReplacePayload(configs: RoleConfig[]): ReplaceConfig[] {
+  return configs.map((c) => ({
+    tipoutType: c.tipoutType,
+    percentageRate: c.percentageRate,
+    effectiveFrom: c.effectiveFrom,
+    effectiveTo: c.effectiveTo,
+    receivesTipout: c.receivesTipout,
+    paysTipout: c.paysTipout,
+    distributionGroup: c.distributionGroup,
+    tipPoolGroup: c.tipPoolGroup,
+  }))
+}
+
 export default function RolesPage() {
-  const [roles, setRoles] = useState<Role[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  const roles = useQuery(api.roles.list)
+  const createRole = useMutation(api.roles.create)
+  const updateRole = useMutation(api.roles.update)
+  const removeRole = useMutation(api.roles.remove)
+  const replaceConfigs = useMutation(api.roleConfigs.replaceForRole)
+
   const [error, setError] = useState<string | null>(null)
   const [isAddingRole, setIsAddingRole] = useState(false)
   const [newRole, setNewRole] = useState({ name: '', basePayRate: '' })
   const [editingConfig, setEditingConfig] = useState<{
-    roleId: string
-    tipoutType: string
+    roleId: Id<'roles'>
+    tipoutType: TipoutType
     percentageRate: string
   } | null>(null)
   const [editingRole, setEditingRole] = useState<{
-    roleId: string
+    roleId: Id<'roles'>
     basePayRate: string
   } | null>(null)
-
-  useEffect(() => {
-    fetchRoles()
-  }, [])
-
-  const fetchRoles = async () => {
-    try {
-      const response = await fetch('/api/roles')
-      if (!response.ok) {
-        throw new Error('Failed to fetch roles')
-      }
-      const data = await response.json()
-      setRoles(data)
-    } catch (err) {
-      setError('Failed to load roles')
-      console.error('Error loading roles:', err)
-    } finally {
-      setIsLoading(false)
-    }
-  }
 
   const handleAddRole = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!newRole.name.trim() || !newRole.basePayRate) return
 
     try {
-      const response = await fetch('/api/roles', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          name: newRole.name.trim(),
-          basePayRate: Number(newRole.basePayRate),
-        }),
+      await createRole({
+        name: newRole.name.trim(),
+        basePayRate: Number(newRole.basePayRate),
       })
-
-      if (!response.ok) {
-        throw new Error('Failed to add role')
-      }
-
-      const newRoleData = await response.json()
-      setRoles([...roles, newRoleData])
       setNewRole({ name: '', basePayRate: '' })
       setIsAddingRole(false)
     } catch (err) {
@@ -93,45 +82,42 @@ export default function RolesPage() {
     }
   }
 
-  const handleAddConfig = async (e: React.FormEvent, roleId: string, tipoutType: string) => {
+  // Add or update a single tipout config for a role.
+  // Because Convex exposes only replaceForRole, we merge the change into the full
+  // list of active configs for the role, preserving flags (receivesTipout, paysTipout,
+  // distributionGroup, tipPoolGroup). If no active config exists for the type yet, we
+  // create one with sensible defaults mirroring the legacy POST /api/roles/[id]/configurations behaviour.
+  const handleAddConfig = async (
+    e: React.FormEvent,
+    roleId: Id<'roles'>,
+    tipoutType: TipoutType,
+  ) => {
     e.preventDefault()
-    if (!editingConfig?.percentageRate) return
+    if (!editingConfig?.percentageRate || !roles) return
+
+    const role = roles.find((r) => r.id === roleId)
+    if (!role) return
+
+    const nowIso = new Date().toISOString()
+    const existing = role.configs.find((c) => c.tipoutType === tipoutType)
+    const nextConfigs: ReplaceConfig[] = configsToReplacePayload(role.configs).filter(
+      (c) => c.tipoutType !== tipoutType,
+    )
+
+    nextConfigs.push({
+      tipoutType,
+      percentageRate: parseFloat(editingConfig.percentageRate),
+      effectiveFrom: existing?.effectiveFrom ?? nowIso,
+      effectiveTo: null,
+      // Preserve existing flags if a config already exists; otherwise default to "pays tipout".
+      receivesTipout: existing?.receivesTipout ?? false,
+      paysTipout: existing?.paysTipout ?? true,
+      distributionGroup: existing?.distributionGroup ?? null,
+      tipPoolGroup: existing?.tipPoolGroup ?? null,
+    })
 
     try {
-      const response = await fetch(`/api/roles/${roleId}/configurations`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          tipoutType,
-          percentageRate: parseFloat(editingConfig.percentageRate),
-        }),
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to add configuration')
-      }
-
-      const newConfigData = await response.json()
-      
-      setRoles(roles.map(role => {
-        if (role.id === roleId) {
-          const updatedConfigs = role.configs.map(config => {
-            if (config.tipoutType === tipoutType && config.effectiveTo === null) {
-              return { ...config, effectiveTo: format(new Date(), 'yyyy-MM-dd') };
-            }
-            return config;
-          });
-          
-          return {
-            ...role,
-            configs: [...updatedConfigs, newConfigData],
-          }
-        }
-        return role
-      }))
-      
+      await replaceConfigs({ roleId, configs: nextConfigs })
       setEditingConfig(null)
     } catch (err) {
       setError('Failed to add configuration')
@@ -139,94 +125,59 @@ export default function RolesPage() {
     }
   }
 
-  const handleRemoveConfig = async (roleId: string, tipoutType: string) => {
+  const handleRemoveConfig = async (roleId: Id<'roles'>, tipoutType: TipoutType) => {
     if (!confirm('Are you sure you want to remove this tipout configuration?')) {
-      return;
+      return
     }
-    
+    if (!roles) return
+
+    const role = roles.find((r) => r.id === roleId)
+    if (!role) return
+
+    const nextConfigs: ReplaceConfig[] = configsToReplacePayload(role.configs).filter(
+      (c) => c.tipoutType !== tipoutType,
+    )
+
     try {
-      const response = await fetch(`/api/roles/${roleId}/configurations?tipoutType=${tipoutType}`, {
-        method: 'DELETE',
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to remove configuration');
-      }
-
-      setRoles(roles.map(role => {
-        if (role.id === roleId) {
-          const updatedConfigs = role.configs.map(config => {
-            if (config.tipoutType === tipoutType && config.effectiveTo === null) {
-              return { ...config, effectiveTo: format(new Date(), 'yyyy-MM-dd') };
-            }
-            return config;
-          });
-          
-          return {
-            ...role,
-            configs: updatedConfigs,
-          };
-        }
-        return role;
-      }));
+      await replaceConfigs({ roleId, configs: nextConfigs })
     } catch (err) {
-      setError('Failed to remove configuration');
-      console.error('Error removing configuration:', err);
+      setError('Failed to remove configuration')
+      console.error('Error removing configuration:', err)
     }
-  };
+  }
 
-  const handleDeleteRole = async (roleId: string) => {
-    if (!confirm('Are you sure you want to delete this role and all its tipout configurations? This action cannot be undone.')) {
-      return;
+  const handleDeleteRole = async (roleId: Id<'roles'>) => {
+    if (
+      !confirm(
+        'Are you sure you want to delete this role and all its tipout configurations? This action cannot be undone.',
+      )
+    ) {
+      return
     }
-    
+
     try {
-      const response = await fetch(`/api/roles/${roleId}`, {
-        method: 'DELETE',
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to delete role');
-      }
-      
-      setRoles(roles.filter(role => role.id !== roleId));
+      await removeRole({ id: roleId })
     } catch (err) {
-      setError('Failed to delete role');
-      console.error('Error deleting role:', err);
+      setError('Failed to delete role')
+      console.error('Error deleting role:', err)
     }
-  };
+  }
 
-  const getActiveConfig = (role: Role, tipoutType: string) => {
-    return role.configs.find(config => 
-      config.tipoutType === tipoutType && config.effectiveTo === null
+  const getActiveConfig = (role: Role, tipoutType: TipoutType) => {
+    return role.configs.find(
+      (config) => config.tipoutType === tipoutType && config.effectiveTo === null,
     )
   }
 
-  const handleUpdateRolePayRate = async (e: React.FormEvent, roleId: string) => {
+  const handleUpdateRolePayRate = async (e: React.FormEvent, roleId: Id<'roles'>) => {
     e.preventDefault()
     if (!editingRole?.basePayRate) return
-    
+
     try {
-      const response = await fetch(`/api/roles/${roleId}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          basePayRate: parseFloat(editingRole.basePayRate),
-        }),
+      await updateRole({
+        id: roleId,
+        basePayRate: parseFloat(editingRole.basePayRate),
       })
-      
-      if (!response.ok) {
-        throw new Error('Failed to update role')
-      }
-      
-      const updatedRole = await response.json()
-      
-      setRoles(roles.map(role => 
-        role.id === roleId ? updatedRole : role
-      ))
-      
       setEditingRole(null)
     } catch (err) {
       setError('Failed to update role')
@@ -234,7 +185,7 @@ export default function RolesPage() {
     }
   }
 
-  if (isLoading) {
+  if (roles === undefined) {
     return <LoadingSpinner />
   }
 
@@ -695,4 +646,4 @@ export default function RolesPage() {
       </div>
     </div>
   )
-} 
+}

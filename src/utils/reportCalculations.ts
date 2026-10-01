@@ -510,7 +510,8 @@ const summarizeProcessedShifts = (dailyProcessedShifts: ProcessedShift[]): Emplo
   return finalSummaries;
 };
 
-export type ShiftReportResult = ProcessedShift & {
+export type ShiftReportResult = Omit<ProcessedShift, 'role' | 'configs'> & {
+  role: { name: string };
   barTipout: number;
   hostTipout: number;
   saTipout: number;
@@ -524,7 +525,25 @@ export const calculateDailyReport = (shifts: Shift[]) => {
     const totalTipsPerHour = shift.hours > 0 ? (shift.cashTips + shift.payrollTips) / shift.hours : 0;
     const rounded = (amount: number) => Number(amount.toFixed(2));
     return {
-      ...shift,
+      // Explicit display DTO: do not repeat historical role configurations on every row.
+      id: shift.id,
+      date: shift.date,
+      employee: { id: shift.employee.id, name: shift.employee.name },
+      role: { name: shift.role.name },
+      hours: shift.hours,
+      cashTips: shift.cashTips,
+      creditTips: shift.creditTips,
+      liquorSales: shift.liquorSales,
+      originalCashTips: shift.originalCashTips,
+      originalCreditTips: shift.originalCreditTips,
+      tipPoolGroup: shift.tipPoolGroup,
+      paidBarTipout: shift.paidBarTipout,
+      paidHostTipout: shift.paidHostTipout,
+      paidSaTipout: shift.paidSaTipout,
+      receivedBarTipout: shift.receivedBarTipout,
+      receivedHostTipout: shift.receivedHostTipout,
+      receivedSaTipout: shift.receivedSaTipout,
+      payrollTips: shift.payrollTips,
       // Round display values only. Employee summaries still aggregate unrounded allocations.
       barTipout: rounded(shift.receivedBarTipout - shift.paidBarTipout),
       hostTipout: rounded(shift.receivedHostTipout - shift.paidHostTipout),

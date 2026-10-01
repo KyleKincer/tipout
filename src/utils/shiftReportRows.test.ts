@@ -140,7 +140,7 @@ describe('report-aligned shift rows', () => {
     expect(currentFirst.shiftResults.map(s => s.barTipout)).toEqual([20, -20])
     expect(currentFirst.employeeSummaries.map(s => s.totalBarTipout)).toEqual([20, -20])
     // Preserve source ordering rather than silently choosing a new config policy.
-    expect(oldFirst.shiftResults[1].role.configs.map(c => c.id)).toEqual(['closed', 'current'])
+    expect(oldFirst.shiftResults[1].paidBarTipout).toBe(10)
   })
 
   it('does not introduce row wage totals when legacy role-name aggregation is ambiguous', () => {
@@ -155,5 +155,19 @@ describe('report-aligned shift rows', () => {
       expect(row).not.toHaveProperty('payrollTotal')
       expect(row).not.toHaveProperty('totalDollarsPerHour')
     }
+  })
+
+  it('keeps large report rows compact without historical configurations or wage metadata', () => {
+    const historicalConfigs = Array.from({ length: 50 }, (_, i) => ({
+      ...barConfig, id: `historical-${i}`, effectiveFrom: `20${String(10 + Math.floor(i / 12)).padStart(2, '0')}-01-01`,
+    }))
+    const source = Array.from({ length: 2000 }, (_, i) => shift(`bar-${i}`, 'bartender', 'bar', {
+      role: { name: 'bar', basePayRate: 12, configs: historicalConfigs }, configs: historicalConfigs,
+    }))
+    const { shiftResults } = calculateDailyReport(source)
+    expect(shiftResults).toHaveLength(2000)
+    expect(shiftResults[0].role).toEqual({ name: 'bar' })
+    expect(shiftResults[0]).not.toHaveProperty('configs')
+    expect(Buffer.byteLength(JSON.stringify(shiftResults), 'utf8')).toBeLessThan(2 * 1024 * 1024)
   })
 })

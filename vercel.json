@@ -3,5 +3,6 @@
     "env": {
       "PRISMA_SKIP_POSTINSTALL_GENERATE": "true"
     }
-  }
-} 
+  },
+  "buildCommand": "npm run build"
+}

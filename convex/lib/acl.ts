@@ -7,9 +7,9 @@ export async function getIdentityRoles(ctx: AnyCtx): Promise<string[]> {
   const identity = await ctx.auth.getUserIdentity();
   if (!identity) return [];
   const meta = (identity as unknown as { metadata?: { roles?: string[] } }).metadata;
-  if (meta?.roles && Array.isArray(meta.roles)) return meta.roles;
+  if (Array.isArray(meta?.roles) && meta.roles.every((role) => typeof role === "string")) return meta.roles;
   const publicMetadata = (identity as unknown as { publicMetadata?: { roles?: string[] } }).publicMetadata;
-  if (publicMetadata?.roles && Array.isArray(publicMetadata.roles)) return publicMetadata.roles;
+  if (Array.isArray(publicMetadata?.roles) && publicMetadata.roles.every((role) => typeof role === "string")) return publicMetadata.roles;
   return [];
 }
 

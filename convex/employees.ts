@@ -2,6 +2,7 @@ import { v, ConvexError } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { serializeEmployee } from "./lib/serialize";
 import { requireAdmin, requireAuthenticated } from "./lib/acl";
+import { resolveLegacyDoc } from "./lib/legacyIds";
 import { employeeValidator } from "./lib/validators";
 
 export const list = query({
@@ -23,11 +24,11 @@ export const list = query({
 });
 
 export const get = query({
-  args: { id: v.id("employees") },
+  args: { id: v.string() },
   returns: v.union(employeeValidator, v.null()),
   handler: async (ctx, { id }) => {
     await requireAuthenticated(ctx);
-    const employee = await ctx.db.get(id);
+    const employee = await resolveLegacyDoc(ctx, "employees", id);
     if (!employee) return null;
     const defaultRole = employee.defaultRoleId
       ? await ctx.db.get(employee.defaultRoleId)
@@ -61,16 +62,20 @@ export const update = mutation({
     name: v.optional(v.string()),
     active: v.optional(v.boolean()),
     defaultRoleId: v.optional(v.union(v.id("roles"), v.null())),
+    expectedUpdatedAt: v.optional(v.number()),
   },
   returns: employeeValidator,
-  handler: async (ctx, { id, name, active, defaultRoleId }) => {
+  handler: async (ctx, { id, name, active, defaultRoleId, expectedUpdatedAt }) => {
     await requireAdmin(ctx);
     const existing = await ctx.db.get(id);
     if (!existing) throw new ConvexError("Employee not found");
+    if (expectedUpdatedAt !== undefined && expectedUpdatedAt !== existing.updatedAt) {
+      throw new ConvexError("Employee changed in another session. Reload before saving.");
+    }
     if (defaultRoleId && !(await ctx.db.get(defaultRoleId))) {
       throw new ConvexError("Default role not found");
     }
-    const patch: Record<string, unknown> = { updatedAt: Date.now() };
+    const patch: Record<string, unknown> = { updatedAt: Math.max(Date.now(), existing.updatedAt + 1) };
     if (name !== undefined) patch.name = name;
     if (active !== undefined) patch.active = active;
     if (defaultRoleId !== undefined)

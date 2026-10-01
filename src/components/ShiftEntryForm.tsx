@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useForm } from 'react-hook-form'
 import { format } from 'date-fns'
+import { shouldApplyEmployeeDefault } from '@/lib/shiftFormState'
 import { useMutation } from 'convex/react'
 import { useAuthenticatedQuery as useQuery } from '@/lib/useAuthenticatedQuery'
 import type { FunctionReturnType } from 'convex/server'
@@ -53,6 +54,7 @@ export default function ShiftEntryForm({ initialData, onSubmit }: ShiftEntryForm
   // Watch for employee and role changes
   const employeeId = watch('employeeId')
   const roleId = watch('roleId')
+  const previousEmployeeId = useRef<string | undefined>(initialData?.employeeId)
 
   // Update selectedRole when roleId changes
   useEffect(() => {
@@ -64,16 +66,13 @@ export default function ShiftEntryForm({ initialData, onSubmit }: ShiftEntryForm
     }
   }, [roleId, roles])
 
-  // Set default role when employee is selected
+  // A reactive employee refresh is not a new selection. Preserve the existing
+  // edit role and any manual role selection until the employee really changes.
   useEffect(() => {
-    if (employeeId && employees) {
-      const employee = employees.find(e => e.id === employeeId)
-      if (employee?.defaultRoleId) {
-        setValue('roleId', employee.defaultRoleId)
-      } else {
-        setValue('roleId', '')
-      }
-    }
+    if (!shouldApplyEmployeeDefault(previousEmployeeId.current, employeeId, employees !== undefined)) return
+    previousEmployeeId.current = employeeId
+    const employee = employees?.find(e => e.id === employeeId)
+    setValue('roleId', employee?.defaultRoleId ?? '')
   }, [employeeId, employees, setValue])
 
   const handleFormSubmit = async (data: ShiftFormData) => {
@@ -82,7 +81,7 @@ export default function ShiftEntryForm({ initialData, onSubmit }: ShiftEntryForm
       if (onSubmit) {
         await onSubmit(data)
       } else {
-        const result = await createShift({
+        await createShift({
           employeeId: data.employeeId as Id<'employees'>,
           roleId: data.roleId as Id<'roles'>,
           date: data.date,
@@ -91,7 +90,6 @@ export default function ShiftEntryForm({ initialData, onSubmit }: ShiftEntryForm
           creditTips: Number(data.creditTips) || 0,
           liquorSales: Number(data.liquorSales) || 0,
         })
-        console.log('Shift saved:', result)
         reset()
       }
     } catch (err) {

@@ -1,5 +1,5 @@
 import { calculateEmployeeRoleSummariesDaily, calculateOverallSummary } from './reportCalculations';
-import { Shift, EmployeeRoleSummary, RoleConfig, ReportSummary, TipoutType } from '@/types/reports'; // Assuming types are exported from here
+import { Shift, RoleConfig, TipoutType } from '@/types/reports';
 
 // --- Mock Data Setup ---
 
@@ -107,33 +107,44 @@ describe('reportCalculations', () => {
             expect(summary.totalLiquorSales).toBeCloseTo(1000);
         });
 
-        it('should calculate total tipouts paid correctly (ignoring SA)', () => {
-             // Server pays 25% Liq to Bar, 7% Tips to Host
-             // Bar pays 7% Tips to Host
+        it('should charge bar tipouts but not host or SA tipouts when those receivers are absent', () => {
+             // A configured rate only charges when a receiving role worked that day.
              const shifts: Shift[] = [
-                mockShift('s1', empDylan, roleServer, '2024-03-15', 8, 50, 150, 400), // Tips=200, Liq=400 -> Pays Bar=100, Host=14
-                mockShift('s2', empBrigid, roleBar, '2024-03-15', 7, 20, 80, 600),    // Tips=100, Liq=600 -> Pays Host=7
+                mockShift('s1', empDylan, roleServer, '2024-03-15', 8, 50, 150, 400), // Pays Bar=100
+                mockShift('s2', empBrigid, roleBar, '2024-03-15', 7, 20, 80, 600),
             ];
             const summary = calculateOverallSummary(shifts);
             // Total Paid *Into* Pools
             expect(summary.totalBarTipoutPaid).toBeCloseTo(100); // Only server pays bar
-            expect(summary.totalHostTipoutPaid).toBeCloseTo(14 + 7); // Server + Bar pay host
+            expect(summary.totalHostTipoutPaid).toBeCloseTo(0); // No host shifts present
             expect(summary.totalSaTipoutPaid).toBeCloseTo(0); // No SA shifts present
         });
         
-        it('should calculate total tipouts paid correctly (with SA)', () => {
-             // Server pays 25% Liq to Bar, 7% Tips to Host, 4% Tips to SA
-             // Bar pays 7% Tips to Host, 4% Tips to SA
+        it('should charge bar and SA tipouts but not host tipouts when only a host is absent', () => {
+             // Server and Bar pay SA, but neither pays Host without a receiving shift.
              const shifts: Shift[] = [
-                mockShift('s1', empDylan, roleServer, '2024-03-15', 8, 50, 150, 400), // Tips=200, Liq=400 -> Pays Bar=100, Host=14, SA=8
-                mockShift('s2', empBrigid, roleBar, '2024-03-15', 7, 20, 80, 600),    // Tips=100, Liq=600 -> Pays Host=7, SA=4
+                mockShift('s1', empDylan, roleServer, '2024-03-15', 8, 50, 150, 400), // Pays Bar=100, SA=8
+                mockShift('s2', empBrigid, roleBar, '2024-03-15', 7, 20, 80, 600),    // Pays SA=4
                 mockShift('s3', empAlex, roleSA, '2024-03-15', 6, 0, 0, 0),        // SA present
             ];
             const summary = calculateOverallSummary(shifts);
             // Total Paid *Into* Pools
             expect(summary.totalBarTipoutPaid).toBeCloseTo(100); // Only server pays bar
-            expect(summary.totalHostTipoutPaid).toBeCloseTo(14 + 7); // Server + Bar pay host
+            expect(summary.totalHostTipoutPaid).toBeCloseTo(0); // No host shifts present
             expect(summary.totalSaTipoutPaid).toBeCloseTo(8 + 4); // Server + Bar pay SA
+        });
+
+        it('should charge host tipouts only on days with a receiving host shift', () => {
+            const shifts: Shift[] = [
+                mockShift('s1', empDylan, roleServer, '2024-03-15', 8, 50, 150, 400),
+                mockShift('s2', empBrigid, roleBar, '2024-03-15', 7, 20, 80, 600),
+                mockShift('s3', empChristina, roleHost, '2024-03-15', 5, 0, 0, 0),
+                mockShift('s4', empDylan, roleServer, '2024-03-16', 8, 50, 150, 400),
+            ];
+            const summary = calculateOverallSummary(shifts);
+            expect(summary.totalHostTipoutPaid).toBeCloseTo(14 + 7);
+            expect(summary.totalBarTipoutPaid).toBeCloseTo(100);
+            expect(summary.totalSaTipoutPaid).toBeCloseTo(0);
         });
         
         // Add more tests for average calculations if they become critical, 
@@ -178,21 +189,22 @@ describe('reportCalculations', () => {
             expect(christinaSummary!.payrollTotal).toBeCloseTo((10 * 8) + 40); // 80 + 40 = 120
         });
 
-        it('Scenario: Server Pool with Bar Tipout', () => {
+        it('Scenario: Server Pool with Bar Tipout uses active role configs, not shift.configs', () => {
             // Server Pool: Dylan (8h) + Regan (7h) = 15h total
             // Server Pool Tips: Cash=100, Credit=300
             // Server Pool Liq Sales: Dylan=400, Regan=300 = 700 total
-            // Bar Tipout: 10% of Liq Sales (paid after pooling)
+            // The active role config charges 25% of individual liquor sales after pooling.
+            // The historical shift.configs property is not used by either legacy calculator.
             // Host Tipout: 7% of Tips (paid before pooling)
             // SA Tipout: 4% of Tips (paid before pooling)
-            const serverPoolConfig = [
-                mockRoleConfig('cfgBar', 'bar', 10, { paysTipout: true }), // 10% of Liq to Bar
+            const ignoredShiftConfigs = [
+                mockRoleConfig('cfgBar', 'bar', 10, { paysTipout: true }),
                 mockRoleConfig('cfgHost', 'host', 7, { paysTipout: true }), // 7% of Tips to Host
                 mockRoleConfig('cfgSA', 'sa', 4, { paysTipout: true }), // 4% of Tips to SA
             ];
             const shifts: Shift[] = [
-                mockShift('s1', empDylan, roleServer, '2024-03-15', 8, 50, 150, 400, serverPoolConfig),
-                mockShift('s2', empRegan, roleServer, '2024-03-15', 7, 50, 150, 300, serverPoolConfig),
+                mockShift('s1', empDylan, roleServer, '2024-03-15', 8, 50, 150, 400, ignoredShiftConfigs),
+                mockShift('s2', empRegan, roleServer, '2024-03-15', 7, 50, 150, 300, ignoredShiftConfigs),
                 mockShift('s3', empBrigid, roleBar, '2024-03-15', 6, 0, 0, 0), // Bar present
                 mockShift('s4', empChristina, roleHost, '2024-03-15', 5, 0, 0, 0), // Host present
                 mockShift('s5', empAlex, roleSA, '2024-03-15', 4, 0, 0, 0), // SA present
@@ -205,41 +217,43 @@ describe('reportCalculations', () => {
             const christinaSummary = summaries.find(s => s.employeeId === empChristina.id);
             const alexSummary = summaries.find(s => s.employeeId === empAlex.id);
 
+            // Net pooled credit = 300 - (400 * 7%) - (400 * 4%) = 256.
+            // Host/SA are deducted once before pooling; Bar remains an individual payment.
             // Dylan (Server Pool)
             expect(dylanSummary!.tipPoolGroup).toBe('server_pool');
             expect(dylanSummary!.totalCashTips).toBeCloseTo(8 * 6.6667); // 53.33
-            expect(dylanSummary!.totalCreditTips).toBeCloseTo(8 * 8.1333); // 65.07
+            expect(dylanSummary!.totalCreditTips).toBeCloseTo(256 * 8 / 15); // 136.53
             expect(dylanSummary!.totalGrossCreditTips).toBeCloseTo(150);
-            expect(dylanSummary!.totalBarTipout).toBeCloseTo(-40); // Pays 10% of 400 liquor sales
-            expect(dylanSummary!.totalHostTipout).toBeCloseTo(0); // Pooled display
-            expect(dylanSummary!.totalSaTipout).toBeCloseTo(0); // Pooled display
-            expect(dylanSummary!.totalPayrollTips).toBeCloseTo(8 * 8.1333 - 40); // 65.07 - 40 = 25.07
-            expect(dylanSummary!.payrollTotal).toBeCloseTo((3 * 8) + 25.07); // 24 + 25.07 = 49.07
+            expect(dylanSummary!.totalBarTipout).toBeCloseTo(-100); // Pays 25% of 400 liquor sales
+            expect(dylanSummary!.totalHostTipout).toBeCloseTo(-14); // Net received minus paid, including pooled roles
+            expect(dylanSummary!.totalSaTipout).toBeCloseTo(-8);
+            expect(dylanSummary!.totalPayrollTips).toBeCloseTo(256 * 8 / 15 - 100); // 36.53
+            expect(dylanSummary!.payrollTotal).toBeCloseTo((3 * 8) + 36.53); // 60.53
 
             // Regan (Server Pool)
             expect(reganSummary!.tipPoolGroup).toBe('server_pool');
             expect(reganSummary!.totalCashTips).toBeCloseTo(7 * 6.6667); // 46.67
-            expect(reganSummary!.totalCreditTips).toBeCloseTo(7 * 8.1333); // 56.93
+            expect(reganSummary!.totalCreditTips).toBeCloseTo(256 * 7 / 15); // 119.47
             expect(reganSummary!.totalGrossCreditTips).toBeCloseTo(150);
-            expect(reganSummary!.totalBarTipout).toBeCloseTo(-30); // Pays 10% of 300 liquor sales
-            expect(reganSummary!.totalHostTipout).toBeCloseTo(0);
-            expect(reganSummary!.totalSaTipout).toBeCloseTo(0);
-            expect(reganSummary!.totalPayrollTips).toBeCloseTo(7 * 8.1333 - 30); // 56.93 - 30 = 26.93
-            expect(reganSummary!.payrollTotal).toBeCloseTo((3 * 7) + 26.93); // 21 + 26.93 = 47.93
+            expect(reganSummary!.totalBarTipout).toBeCloseTo(-75); // Pays 25% of 300 liquor sales
+            expect(reganSummary!.totalHostTipout).toBeCloseTo(-14);
+            expect(reganSummary!.totalSaTipout).toBeCloseTo(-8);
+            expect(reganSummary!.totalPayrollTips).toBeCloseTo(256 * 7 / 15 - 75); // 44.47
+            expect(reganSummary!.payrollTotal).toBeCloseTo((3 * 7) + 44.47); // 65.47
 
             // Brigid (Bar)
-            expect(brigidSummary!.tipPoolGroup).toBeUndefined(); // Not pooled
+            expect(brigidSummary!.tipPoolGroup).toBe('bar_pool'); // Defined by the Bar role's active configs
             expect(brigidSummary!.totalCashTips).toBeCloseTo(0);
             expect(brigidSummary!.totalCreditTips).toBeCloseTo(0);
             expect(brigidSummary!.totalGrossCreditTips).toBeCloseTo(0);
-            expect(brigidSummary!.totalBarTipout).toBeCloseTo(70); // Receives 10% of 700 total liquor sales
+            expect(brigidSummary!.totalBarTipout).toBeCloseTo(175); // Receives 25% of 700 total liquor sales
             expect(brigidSummary!.totalHostTipout).toBeCloseTo(0);
             expect(brigidSummary!.totalSaTipout).toBeCloseTo(0);
-            expect(brigidSummary!.totalPayrollTips).toBeCloseTo(0 + 70); // 0 + 70 = 70
-            expect(brigidSummary!.payrollTotal).toBeCloseTo((9 * 6) + 70); // 54 + 70 = 124
+            expect(brigidSummary!.totalPayrollTips).toBeCloseTo(175);
+            expect(brigidSummary!.payrollTotal).toBeCloseTo((9 * 6) + 175); // 229
 
             // Christina (Host)
-            expect(christinaSummary!.tipPoolGroup).toBeUndefined(); // Not pooled
+            expect(christinaSummary!.tipPoolGroup).toBeNull(); // No active tip pool group
             expect(christinaSummary!.totalCashTips).toBeCloseTo(0);
             expect(christinaSummary!.totalCreditTips).toBeCloseTo(0);
             expect(christinaSummary!.totalGrossCreditTips).toBeCloseTo(0);
@@ -247,10 +261,10 @@ describe('reportCalculations', () => {
             expect(christinaSummary!.totalHostTipout).toBeCloseTo(28); // Receives 7% of 400 total tips
             expect(christinaSummary!.totalSaTipout).toBeCloseTo(0);
             expect(christinaSummary!.totalPayrollTips).toBeCloseTo(0 + 28); // 0 + 28 = 28
-            expect(christinaSummary!.payrollTotal).toBeCloseTo((5 * 5) + 28); // 25 + 28 = 53
+            expect(christinaSummary!.payrollTotal).toBeCloseTo((10 * 5) + 28); // Host base rate is 10: total 78
 
             // Alex (SA)
-            expect(alexSummary!.tipPoolGroup).toBeUndefined(); // Not pooled
+            expect(alexSummary!.tipPoolGroup).toBeNull(); // No active tip pool group
             expect(alexSummary!.totalCashTips).toBeCloseTo(0);
             expect(alexSummary!.totalCreditTips).toBeCloseTo(0);
             expect(alexSummary!.totalGrossCreditTips).toBeCloseTo(0);
@@ -258,7 +272,10 @@ describe('reportCalculations', () => {
             expect(alexSummary!.totalHostTipout).toBeCloseTo(0);
             expect(alexSummary!.totalSaTipout).toBeCloseTo(16); // Receives 4% of 400 total tips
             expect(alexSummary!.totalPayrollTips).toBeCloseTo(0 + 16); // 0 + 16 = 16
-            expect(alexSummary!.payrollTotal).toBeCloseTo((4 * 4) + 16); // 16 + 16 = 32
+            expect(alexSummary!.payrollTotal).toBeCloseTo((8 * 4) + 16); // SA base rate is 8: total 48
+
+            expect(summaries.reduce((sum, row) => sum + row.totalPayrollTips, 0)).toBeCloseTo(300);
+            expect(summaries.reduce((sum, row) => sum + row.totalCashTips, 0)).toBeCloseTo(100);
         });
         
         it('should handle zero hour shifts correctly', () => {
@@ -287,4 +304,4 @@ describe('reportCalculations', () => {
         });
 
     });
-}); 
+});

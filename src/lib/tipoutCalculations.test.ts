@@ -94,12 +94,12 @@ describe('calculateTipouts', () => {
 
         // No Bar present
         expect(calculateTipouts(shift, true, true, false)).toEqual({ barTipout: 0, hostTipout: 3, saTipout: 6 });
-        // No Host present (Note: Current implementation has host check commented out, test reflects that)
-        expect(calculateTipouts(shift, false, true, true)).toEqual({ barTipout: 25, hostTipout: 3, saTipout: 6 }); // If check re-enabled, hostTipout should be 0
+        // The legacy calculator only charges a host tipout when a host is present.
+        expect(calculateTipouts(shift, false, true, true)).toEqual({ barTipout: 25, hostTipout: 0, saTipout: 6 });
         // No SA present
         expect(calculateTipouts(shift, true, false, true)).toEqual({ barTipout: 25, hostTipout: 3, saTipout: 0 });
         // None present
-        expect(calculateTipouts(shift, false, false, false)).toEqual({ barTipout: 0, hostTipout: 3, saTipout: 0 }); // If host check re-enabled, hostTipout should be 0
+        expect(calculateTipouts(shift, false, false, false)).toEqual({ barTipout: 0, hostTipout: 0, saTipout: 0 });
     });
 
      it('should not calculate tipout if paysTipout is false', () => {
@@ -145,7 +145,11 @@ describe('calculateTipouts', () => {
 
         // Bar tipout is calculated based on individual liquor sales after pooling
         // 10% of 400 liquor sales = 40
-        expect(calculateTipouts(shift, true, true, true)).toEqual({ barTipout: 40, hostTipout: 14, saTipout: 8 });
+        // The calculator does not round intermediate floating-point amounts.
+        const result = calculateTipouts(shift, true, true, true);
+        expect(result.barTipout).toBeCloseTo(40);
+        expect(result.hostTipout).toBeCloseTo(14);
+        expect(result.saTipout).toBeCloseTo(8);
     });
 });
 
@@ -345,4 +349,4 @@ describe('findActiveConfig', () => {
         const shiftJan = createDatedMockShift('2024-01-15', configs);
         expect(calculateTipouts(shiftJan, true, false, false).hostTipout).toBeCloseTo(0);
      });
-}); 
+});

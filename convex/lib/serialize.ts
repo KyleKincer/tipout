@@ -6,6 +6,7 @@ export function serializeEmployee(
 ) {
   return {
     id: doc._id,
+    legacyId: doc.legacyId,
     name: doc.name,
     active: doc.active,
     defaultRoleId: doc.defaultRoleId ?? null,
@@ -71,6 +72,7 @@ export function serializeShift(
     updatedAt: new Date(doc.updatedAt).toISOString(),
     employee: {
       id: employee._id,
+      legacyId: employee.legacyId,
       name: employee.name,
       active: employee.active,
       defaultRoleId: employee.defaultRoleId ?? null,

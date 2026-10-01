@@ -1,8 +1,9 @@
 import { redirect } from 'next/navigation'
 import { SearchUsers } from './SearchUsers'
-import { clerkClient, auth } from '@clerk/nextjs/server'
+import { clerkClient } from '@clerk/nextjs/server'
 import { assignRole, removeRole } from '@/app/actions/userActions'
-import { UserRole, isAdmin } from '@/lib/roles'
+import { UserRole } from '@/lib/roles'
+import { getRolesFromMetadata, isAdmin } from '@/lib/auth'
 import { Suspense } from 'react'
 import ManageInvitations from './ManageInvitations'
 import { UserItem } from './components/UserItem'
@@ -16,25 +17,6 @@ type SerializedUser = {
   emailAddress: string | null;
   roles: string[];
 };
-
-// Helper function to generate initials from first and last name
-function getInitials(firstName: string | null, lastName: string | null): string {
-  const first = firstName?.charAt(0) || '';
-  const last = lastName?.charAt(0) || '';
-  return (first + last).toUpperCase();
-}
-
-// Helper function to generate a consistent color based on user ID
-function getColorFromUserId(userId: string): string {
-  // Simple hash function to get a number from string
-  const hash = Array.from(userId).reduce((acc, char) => char.charCodeAt(0) + acc, 0);
-  // List of background colors
-  const colors = [
-    'bg-blue-500', 'bg-green-500', 'bg-yellow-500', 'bg-red-500', 
-    'bg-indigo-500', 'bg-purple-500', 'bg-pink-500', 'bg-teal-500'
-  ];
-  return colors[hash % colors.length];
-}
 
 // UserList component with Suspense support
 type UsersListProps = {
@@ -56,7 +38,7 @@ async function UsersList({ searchQuery }: UsersListProps) {
     lastName: user.lastName,
     imageUrl: user.imageUrl,
     emailAddress: user.emailAddresses.find(email => email.id === user.primaryEmailAddressId)?.emailAddress || null,
-    roles: (user.publicMetadata?.roles as string[]) || []
+    roles: getRolesFromMetadata(user.publicMetadata)
   }));
 
   return (
@@ -114,20 +96,18 @@ function UsersListLoading() {
 }
 
 type PageProps = {
-  searchParams: { search?: string }
+  searchParams: Promise<{ search?: string | string[] }>
 }
 
 export default async function AdminPage({ searchParams }: PageProps) {
-  const { sessionClaims } = await auth();
-  const userRoles = (sessionClaims?.metadata as any)?.roles as string[] || [];
-  
   // Check if the current user is an admin, redirect if not
-  if (!isAdmin(userRoles as UserRole[])) {
+  if (!(await isAdmin())) {
     redirect('/')
   }
 
   // Get search query from searchParams
-  const searchQuery = typeof searchParams.search === 'string' ? searchParams.search : '';
+  const { search } = await searchParams;
+  const searchQuery = typeof search === 'string' ? search : '';
 
   return (
     <div className="px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto pb-12">
@@ -151,4 +131,4 @@ export default async function AdminPage({ searchParams }: PageProps) {
       </Suspense>
     </div>
   )
-} 
+}

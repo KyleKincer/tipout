@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
-    "build": "prisma generate && next build",
+    "build": "node --import tsx scripts/verify-backend-compatibility.ts && prisma generate && next build",
     "start": "next start",
     "lint": "next lint",
     "test": "jest",
@@ -12,7 +12,9 @@
     "migrate:convex": "node --import tsx scripts/migrate-to-convex.ts",
     "parity:reports": "node --import tsx scripts/parity-reports.ts",
     "test:backfill": "jest scripts/__tests__/backfill --runInBand",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "lint:all": "eslint src convex scripts --ignore-pattern '**/_generated/**'",
+    "verify": "npm run lint:all && npm run typecheck && npm test -- --runInBand"
   },
   "dependencies": {
     "@clerk/nextjs": "^6.12.10",

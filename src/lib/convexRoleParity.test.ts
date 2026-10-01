@@ -23,6 +23,7 @@ function setup(seed: Data, admin = true) {
   const ctx = {
     auth: { getUserIdentity: async () => ({ subject: 'test', metadata: { roles: admin ? ['admin'] : ['user'] } }) },
     db: {
+      normalizeId: (_table: string, id: string) => id.includes(':') ? id : null,
       get: async (id: string) => Object.values(data).flat().find((row) => row._id === id) ?? null,
       query: (table: string) => {
         const filters: Array<[string, unknown]> = [];
@@ -31,6 +32,7 @@ function setup(seed: Data, admin = true) {
           withIndex: (_name: string, build: (q: typeof builder) => unknown) => { build(builder); return result; },
           collect: async () => (data[table] ?? []).filter((row) => filters.every(([key, value]) => row[key] === value)),
           first: async () => (await result.collect())[0] ?? null,
+          take: async (count: number) => (await result.collect()).slice(0, count),
         };
         return result;
       },
@@ -86,6 +88,19 @@ function payload(row: Row) {
   };
 }
 
+function snapshot(data: Data) {
+  return {
+    roleUpdatedAt: Number(data.roles[0].updatedAt),
+    configs: data.roleConfigs.map((row) => ({ id: row._id, updatedAt: Number(row.updatedAt) })),
+  };
+}
+function advancedArgs(data: Data) {
+  return {
+    roleId: 'roles:r', name: 'Changed name', basePayRate: 20,
+    configs: data.roleConfigs.map(payload), expected: snapshot(data),
+  };
+}
+
 beforeEach(() => jest.spyOn(Date, 'now').mockReturnValue(NOW));
 afterEach(() => jest.restoreAllMocks());
 
@@ -102,10 +117,19 @@ describe('Convex role and pool-only migration parity', () => {
     expect(list[0].configs).toHaveLength(1);
   });
 
+  test('legacy role bookmark resolves the native ID and all historical configs', async () => {
+    const seed = base([config('past', { effectiveTo: CLOSED }), config('current', { effectiveFrom: CLOSED })]);
+    seed.roles[0].legacyId = 'legacyrolecuid';
+    const { ctx } = setup(seed);
+    const result = await run(roles.get, ctx, { id: 'legacyrolecuid' }) as { id: string; configs: unknown[] };
+    expect(result.id).toBe('roles:r');
+    expect(result.configs).toHaveLength(2);
+  });
+
   test('unchanged full round-trip preserves history, exact instants, pool-only membership and legacy identity', async () => {
     const rows = [config('closed', { effectiveTo: CLOSED }), config('pool', { tipoutType: '', paysTipout: false, effectiveFrom: CLOSED, tipPoolGroup: 'servers' })];
     const { ctx, data, writes } = setup(base(rows));
-    await run(roleConfigs.replaceForRole, ctx, { roleId: 'roles:r', configs: rows.map(payload) });
+    await run(roleConfigs.replaceForRole, ctx, { roleId: 'roles:r', expected: snapshot(data), configs: rows.map(payload) });
     expect(data.roleConfigs).toEqual(rows);
     expect(writes).toEqual([]);
   });
@@ -114,14 +138,14 @@ describe('Convex role and pool-only migration parity', () => {
     const closed = config('closed', { effectiveTo: CLOSED });
     const active = config('active', { effectiveFrom: CLOSED });
     const { ctx, data } = setup(base([closed, active]));
-    await run(roleConfigs.replaceForRole, ctx, { roleId: 'roles:r', configs: [payload(active)] });
+    await run(roleConfigs.replaceForRole, ctx, { roleId: 'roles:r', expected: snapshot(data), configs: [payload(active)] });
     expect(data.roleConfigs).toEqual([closed, active]);
   });
 
   test('active advanced edit retains the migrated row identity', async () => {
     const active = config('active');
     const { ctx, data } = setup(base([active]));
-    await run(roleConfigs.replaceForRole, ctx, { roleId: 'roles:r', configs: [{ ...payload(active), percentageRate: 6 }] });
+    await run(roleConfigs.replaceForRole, ctx, { roleId: 'roles:r', expected: snapshot(data), configs: [{ ...payload(active), percentageRate: 6 }] });
     expect(data.roleConfigs[0]).toMatchObject({ _id: 'active', legacyId: 'legacy:active', createdAt: FROM, updatedAt: NOW, percentageRate: 6 });
   });
 
@@ -133,8 +157,8 @@ describe('Convex role and pool-only migration parity', () => {
       { ...payload(config('b')), id: undefined, effectiveFrom: '2026-01-01T00:00:00.000Z' },
     ],
   ])('invalid replacement is rejected before any writes: %p', async (...configs) => {
-    const { ctx, writes } = setup(base([config('a')]));
-    await expect(run(roleConfigs.replaceForRole, ctx, { roleId: 'roles:r', configs })).rejects.toThrow();
+    const { ctx, data, writes } = setup(base([config('a')]));
+    await expect(run(roleConfigs.replaceForRole, ctx, { roleId: 'roles:r', expected: snapshot(data), configs })).rejects.toThrow();
     expect(writes).toEqual([]);
   });
 
@@ -193,5 +217,126 @@ describe('Convex role and pool-only migration parity', () => {
     expect(writes).toEqual([]);
     await run(employees.update, ctx, { id: 'employees:e', defaultRoleId: null });
     expect(data.employees[0].defaultRoleId).toBeUndefined();
+  });
+});
+
+
+describe('optimistic concurrency and atomic advanced role saves', () => {
+  test('stale advanced save cannot reopen expired X, delete new Y, or partially update role fields', async () => {
+    const { ctx, data, writes } = setup(base([config('x')]));
+    const stale = advancedArgs(data);
+    await run(roleConfigs.setCurrent, ctx, { roleId: 'roles:r', tipoutType: 'host', percentageRate: 12 });
+    const beforeSave = structuredClone(data);
+    writes.length = 0;
+    await expect(run(roleConfigs.saveRoleWithConfigs, ctx, stale)).rejects.toThrow('changed while you were editing');
+    expect(writes).toEqual([]);
+    expect(data).toEqual(beforeSave);
+  });
+
+  test.each(['added', 'deleted', 'updated'] as const)('complete snapshot detects a concurrently %s config before any writes', async (change) => {
+    const { ctx, data, writes } = setup(base([config('x'), config('other', { tipoutType: 'bar' })]));
+    const stale = advancedArgs(data);
+    if (change === 'added') await ctx.db.insert('roleConfigs', config('new', { tipoutType: 'sa' }));
+    if (change === 'deleted') await ctx.db.delete('other');
+    if (change === 'updated') await ctx.db.patch('other', { updatedAt: NOW, percentageRate: 10 });
+    const beforeSave = structuredClone(data);
+    writes.length = 0;
+    await expect(run(roleConfigs.saveRoleWithConfigs, ctx, stale)).rejects.toThrow('changed while you were editing');
+    await expect(run(roleConfigs.replaceForRole, ctx, { roleId: stale.roleId, configs: stale.configs, expected: stale.expected })).rejects.toThrow('changed while you were editing');
+    expect(writes).toEqual([]);
+    expect(data).toEqual(beforeSave);
+  });
+
+  test('concurrent role name or pay edit blocks the stale complete save', async () => {
+    const { ctx, data, writes } = setup(base([config('x')]));
+    const stale = advancedArgs(data);
+    await run(roles.update, ctx, { id: 'roles:r', basePayRate: 30 });
+    const beforeSave = structuredClone(data);
+    writes.length = 0;
+    await expect(run(roleConfigs.saveRoleWithConfigs, ctx, stale)).rejects.toThrow('changed while you were editing');
+    expect(writes).toEqual([]);
+    expect(data).toEqual(beforeSave);
+  });
+
+  test('unchanged valid advanced roundtrip preserves every row and timestamp', async () => {
+    const { ctx, data, writes } = setup(base([config('x'), config('past', { tipoutType: 'sa', effectiveTo: CLOSED })]));
+    const beforeSave = structuredClone(data);
+    await run(roleConfigs.saveRoleWithConfigs, ctx, { ...advancedArgs(data), name: 'Server', basePayRate: 10 });
+    expect(writes).toEqual([]);
+    expect(data).toEqual(beforeSave);
+  });
+
+  test('valid complete save updates role and config together', async () => {
+    const { ctx, data } = setup(base([config('x')]));
+    const args = advancedArgs(data);
+    args.configs[0].percentageRate = 9;
+    await run(roleConfigs.saveRoleWithConfigs, ctx, args);
+    expect(data.roles[0]).toMatchObject({ name: 'Changed name', basePayRate: 20, updatedAt: NOW });
+    expect(data.roleConfigs[0]).toMatchObject({ percentageRate: 9, updatedAt: NOW, legacyId: 'legacy:x' });
+  });
+
+  test('invalid config payload cannot partially save role fields or create a new role', async () => {
+    const { ctx, data, writes } = setup(base([config('x')]));
+    const args = advancedArgs(data);
+    args.configs[0].effectiveFrom = 'invalid-date';
+    await expect(run(roleConfigs.saveRoleWithConfigs, ctx, args)).rejects.toThrow('Invalid configuration date');
+    await expect(run(roleConfigs.saveRoleWithConfigs, ctx, { ...args, roleId: undefined, expected: null, configs: [{ ...args.configs[0], id: undefined }] })).rejects.toThrow('Invalid configuration date');
+    expect(writes).toEqual([]);
+  });
+
+  test('missing or incomplete snapshots cannot use config replacement as an unguarded path', async () => {
+    const { ctx, data, writes } = setup(base([config('x')]));
+    await expect(run(roleConfigs.replaceForRole, ctx, { roleId: 'roles:r', configs: [] })).rejects.toThrow('changed while you were editing');
+    await expect(run(roleConfigs.replaceForRole, ctx, { roleId: 'roles:r', configs: [], expected: { ...snapshot(data), configs: [] } })).rejects.toThrow('changed while you were editing');
+    await expect(run(roleConfigs.saveRoleWithConfigs, ctx, { ...advancedArgs(data), expected: null })).rejects.toThrow('changed while you were editing');
+    expect(writes).toEqual([]);
+  });
+
+  test('snapshot order is irrelevant but duplicate IDs cannot conceal a missing row', async () => {
+    const { ctx, data, writes } = setup(base([config('x'), config('y', { tipoutType: 'sa' })]));
+    const args = advancedArgs(data);
+    args.name = 'Server';
+    args.basePayRate = 10;
+    args.expected.configs.reverse();
+    await run(roleConfigs.saveRoleWithConfigs, ctx, args);
+    expect(writes).toEqual([]);
+    args.expected.configs = [args.expected.configs[0], args.expected.configs[0]];
+    await expect(run(roleConfigs.saveRoleWithConfigs, ctx, args)).rejects.toThrow('changed while you were editing');
+    expect(writes).toEqual([]);
+  });
+
+  test('same-millisecond updates still advance role and config versions', async () => {
+    const seed = base([config('x', { updatedAt: NOW })]);
+    seed.roles[0].updatedAt = NOW;
+    const { ctx, data, writes } = setup(seed);
+    const stale = advancedArgs(data);
+    await run(roles.update, ctx, { id: 'roles:r', name: 'Concurrent name' });
+    expect(data.roles[0].updatedAt).toBe(NOW + 1);
+    writes.length = 0;
+    await expect(run(roleConfigs.saveRoleWithConfigs, ctx, stale)).rejects.toThrow('changed while you were editing');
+    expect(writes).toEqual([]);
+    const beforeConfig = advancedArgs(data);
+    await run(roleConfigs.endCurrent, ctx, { roleId: 'roles:r', tipoutType: 'host' });
+    expect(data.roleConfigs[0].updatedAt).toBe(NOW + 1);
+    writes.length = 0;
+    await expect(run(roleConfigs.saveRoleWithConfigs, ctx, beforeConfig)).rejects.toThrow('changed while you were editing');
+    expect(writes).toEqual([]);
+  });
+
+  test('new role and pool-only config are saved by the same mutation', async () => {
+    const { ctx, data } = setup({ roles: [], roleConfigs: [], employees: [], shifts: [] });
+    await run(roleConfigs.saveRoleWithConfigs, ctx, {
+      name: 'New pool role', basePayRate: 10, expected: null,
+      configs: [{ ...payload(config('draft', { tipoutType: '', paysTipout: false, tipPoolGroup: 'servers' })), id: undefined }],
+    });
+    expect(data.roles).toHaveLength(1);
+    expect(data.roleConfigs).toHaveLength(1);
+    expect(data.roleConfigs[0]).toMatchObject({ roleId: data.roles[0]._id, tipoutType: '', tipPoolGroup: 'servers' });
+  });
+
+  test('legacy set-current API flags remain supported', async () => {
+    const { ctx, data } = setup(base());
+    await run(roleConfigs.setCurrent, ctx, { roleId: 'roles:r', tipoutType: 'host', percentageRate: 0, receivesTipout: true, paysTipout: false, distributionGroup: 'hosts' });
+    expect(data.roleConfigs[0]).toMatchObject({ receivesTipout: true, paysTipout: false, distributionGroup: 'hosts' });
   });
 });

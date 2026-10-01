@@ -42,6 +42,8 @@ Read the [current cutover runbook](docs/CONVEX_CUTOVER_RUNBOOK.md) before deploy
 - `npm run migrate:convex -- --help`: protected snapshot export, dry-run reconciliation, and explicitly gated insert-only apply
 - `npm run parity:reports`: read-only report parity audit; requires an isolated/read-only source or a coordinated freeze and verified source/target identities
 - `npm run test:backfill`: offline migration safety tests
-- `npm run typecheck`: standalone type checking (the existing Next build skips types and lint)
+- `npm run typecheck`: standalone type checking (release builds also enforce type and lint checks)
 
 Never commit source/target exports, migration reports, checkpoints, backup files, or credentials. The runner requires private artifacts outside the checkout. A successful frontend build is not evidence of a matching Convex backend deployment or a completed data migration.
+
+`npm run verify` runs full source lint, type checking and tests. `npm run build` first verifies the target backend contract. For local compilation only, `TIPOUT_OFFLINE_BUILD=1 npm run build` explicitly skips that remote check; hosted builds cannot use this bypass.

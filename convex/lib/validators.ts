@@ -34,6 +34,7 @@ export const roleWithConfigsValidator = v.object({
 
 export const employeeValidator = v.object({
   id: v.id("employees"),
+  legacyId: v.optional(v.string()),
   name: v.string(),
   active: v.boolean(),
   defaultRoleId: v.union(v.id("roles"), v.null()),
@@ -106,6 +107,7 @@ export const shiftValidator = v.object({
   updatedAt: v.string(),
   employee: v.object({
     id: v.id("employees"),
+    legacyId: v.optional(v.string()),
     name: v.string(),
     active: v.boolean(),
     defaultRoleId: v.union(v.id("roles"), v.null()),

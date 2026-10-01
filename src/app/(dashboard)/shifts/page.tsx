@@ -9,6 +9,7 @@ import { useAuthenticatedQuery as useQuery } from '@/lib/useAuthenticatedQuery'
 import type { FunctionReturnType } from 'convex/server'
 import { api } from '../../../../convex/_generated/api'
 import type { Id } from '../../../../convex/_generated/dataModel'
+import { resolveEmployeeFilterId } from '@/lib/employeeFilter'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import { AdminOnly } from '@/components/RoleBasedUI'
 import { getShiftReportHref } from '@/lib/shiftReportLink'
@@ -87,11 +88,11 @@ function ShiftsContent() {
   const queryArgs: {
     startDate?: string
     endDate?: string
-    employeeId?: Id<'employees'>
+    employeeId?: string
     role?: string
   } = { startDate: filters.startDate }
   if (isDateRange) queryArgs.endDate = filters.endDate
-  if (filters.employeeId) queryArgs.employeeId = filters.employeeId as Id<'employees'>
+  if (filters.employeeId) queryArgs.employeeId = filters.employeeId
   if (filters.role) queryArgs.role = filters.role
 
   const shifts = useQuery(api.shifts.list, queryArgs)
@@ -136,6 +137,8 @@ function ShiftsContent() {
   if (shifts === undefined) {
     return <LoadingSpinner />
   }
+
+  const selectedEmployeeId = resolveEmployeeFilterId(shifts.map(shift => shift.employee), filters.employeeId)
 
   // Group shifts by date to determine if hosts/SAs worked each day
   const shiftsByDate = shifts.reduce((acc, shift) => {
@@ -243,7 +246,7 @@ function ShiftsContent() {
                   <div className="mt-2">
                     <select
                       id="employeeId"
-                      value={filters.employeeId}
+                      value={selectedEmployeeId}
                       onChange={(e) => setFilters({ ...filters, employeeId: e.target.value })}
                       className="block w-full rounded-md border-gray-300 shadow-sm px-3 py-2 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed"
                     >

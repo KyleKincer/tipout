@@ -10,7 +10,7 @@ Status: preparation, not a completed migration. No production data import, domai
 - Existing legacy build: https://vercel.com/kylekincers-projects/tipout/5nZVZF5XNfcpGST5EffS1osskHeN
 - The desired customer URL is `https://tipout.kylekincer.com`. Its current Vercel domain assignment, live deployment IDs, source Postgres project/database, target Convex project/deployment, and Clerk instance must be verified in their authenticated dashboards before any data movement
 - A successful Vercel frontend build does not prove that matching Convex functions/schema were deployed or that data was migrated
-- The old `MIGRATION_PLAN.md` is historical design, not implementation evidence. This branch removed the Prisma API routes and does not implement a `NEXT_PUBLIC_USE_CONVEX` flag, dual writes, a reverse ETL, or a maintenance/write-freeze control. Do not rely on flipping a flag as rollback
+- The old `MIGRATION_PLAN.md` is historical design, not implementation evidence. The original successor removed the Prisma API routes; compatibility adapters are now implemented and covered by offline contract tests. It does not implement a `NEXT_PUBLIC_USE_CONVEX` flag, dual writes, a reverse ETL, or a maintenance/write-freeze control. Do not rely on flipping a flag as rollback
 
 ## Non-negotiable invariants
 
@@ -29,7 +29,7 @@ Use an already authorized machine/session with existing credentials; never put c
 
 Record a restricted migration manifest containing:
 
-- Source owner/project, database and schema, source fingerprint, source application commit and runtime timezone
+- Source owner/project, database, schema and database principal (important for shared Supabase pooler hosts), source fingerprint, source application commit and runtime timezone
 - Target owner/project, exact Convex deployment URL/name/environment, frontend project/branch, target code commit and schema protocol version
 - Exact Clerk production instance/issuer, existing public metadata role claim shape, production sign-in/callback/verification domains
 - Source `pg_dump` backup timestamp and SHA-256, restore-test result; destination Convex export timestamp and SHA-256, restore-test result where supported
@@ -73,8 +73,8 @@ A backfill taken while legacy writes continue is a rehearsal, not the final cuto
 
 These are release gates, not promises that the current branch already implements them:
 
-- **Legacy links:** support old CUID/UUID URLs and employee query filters through `legacyId` resolution for `/shifts/:id/edit`, `/employees/:id/edit`, `/roles/:id/edit`, Reports/Shifts employee filters and any saved bookmarks. Current Convex `v.id` validators accept native IDs only. Add dual-ID lookup/resolution and automated end-to-end tests before switch
-- **Permissions:** verify the existing role matrix for anonymous, invited/signed-in staff, admin and revoked users. Legacy lets signed-in staff open New Shift; the successor currently requires admin in `shifts.create`. Resolve this parity mismatch explicitly and test with real Clerk accounts, without changing workforce access accidentally
+- **Legacy links:** support old CUID/UUID URLs and employee query filters through `legacyId` resolution for `/shifts/:id/edit`, `/employees/:id/edit`, `/roles/:id/edit`, Reports/Shifts employee filters and any saved bookmarks. Dual-ID lookup and employee filter aliases are now implemented and unit-tested. Real browser tests of saved old links remain required before switch
+- **Permissions:** verify the existing role matrix for anonymous, invited/signed-in staff, admin and revoked users. Legacy lets signed-in staff open New Shift; the successor now allows authenticated staff in `shifts.create` while retaining admin-only edit/delete. Unit tests cover this matrix; test it with real Clerk accounts before switching
 - **Dates/history:** confirm runtime UTC and source date convention from actual data; test DST/local display boundaries without changing source instants. Preserve full historical config timestamps; active-rate changes must close old rows rather than rewrite history
 - **Write freeze:** implement a server-enforced legacy write gate covering all API routes/server actions, not just a banner; verify existing browser tabs and in-flight requests cannot write after the barrier. Keep successor writes disabled during migration checks
 - **Delta catch-up:** implement audited compare-and-swap updates from the previous imported snapshot to the final snapshot, refusing any independently changed target. Detect deleted source IDs and handle them through an explicitly reviewed migration policy; the current runner does not perform deletion. Alternatively prepare an approved empty target for the final complete import, preserving the rehearsal target and backups. Do not improvise a destructive replace
@@ -108,3 +108,19 @@ Preferred route: keep the customer domain on the existing Vercel `tipout` projec
 - Convex/Clerk auth validation and auth-ready client reads: https://docs.convex.dev/auth/clerk
 - Coordinated Convex and Vercel deployment: https://docs.convex.dev/production/hosting/vercel
 - Convex backup export: https://docs.convex.dev/database/import-export/export
+
+## Backend-first deployment gate
+
+The repository's Vercel build command is `npm run build`. It first calls the metadata-only `deployment:frontendCompatibility` query at the explicitly configured `NEXT_PUBLIC_CONVEX_URL`. The query exposes only a fixed contract identifier, no data or credentials. An absent, older, unreachable or differently configured backend stops the frontend build. This is an expected deployment block until the backend is ready; it is not evidence of a data migration or a failing payroll calculation. Vercel keeps the prior successful production release live when the new build fails.
+
+Safe order after code review:
+
+1. Merge the reviewed code into `convex-migration`; do not point the customer domain at it
+2. Verify the exact existing Convex project/deployment and Clerk issuer, take backups, and deploy the matching backend code/schema using existing authorized deployment access. Do not enable the ETL gate yet
+3. Verify anonymous payroll reads are denied and staff/admin reads and writes have the intended permissions. The public compatibility marker must report the new contract
+4. Rebuild the successor frontend. Its contract gate must pass against that same deployment, followed by normal type/lint/build checks
+5. Verify signed-in browser workflows and run the protected backfill/reconciliation steps before any customer-domain cutover
+
+Local compilation can use `TIPOUT_OFFLINE_BUILD=1 npm run build` with synthetic public environment values. That opt-in performs no backend check and is explicitly rejected when `VERCEL`, `VERCEL_ENV`, or `CI` indicates a hosted build. An offline build is not deployment verification. Do not override the Vercel build command to bypass this gate.
+
+The [parity acceptance matrix](CONVEX_PARITY_MATRIX.md) separates implemented/offline coverage from outstanding live proof. A post-mutation projection/network failure can be ambiguous; never blindly retry a POST without checking the destination.

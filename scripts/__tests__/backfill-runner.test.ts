@@ -19,7 +19,7 @@ jest.mock("convex/browser", () => ({ ConvexHttpClient: jest.fn(() => ({ query: m
 import { main, parseArgs } from "../migrate-to-convex";
 
 let directory: string, env: NodeJS.ProcessEnv, log: jest.SpyInstance;
-const source = { host: "source.test", port: "5432", database: "tipout", schema: "public" };
+const source = { host: "source.test", port: "5432", database: "tipout", schema: "public", principal: "username" };
 const snapshot = sealSnapshot({ version: 1, source, sourceFingerprint: sha256(canonical(source)), capturedAt: "2025-01-01T00:00:00.000Z", postgresSnapshot: "1:2:", tables: {
   roles: [{ id: "legacy-r", name: "PRIVATE PAYROLE", basePayRate: "123.45", createdAt: "2025-01-01T00:00:00.000Z", updatedAt: "2025-01-01T00:00:00.000Z" }], employees: [], roleConfigs: [], shifts: [],
 } });

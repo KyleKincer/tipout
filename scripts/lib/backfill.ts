@@ -80,7 +80,7 @@ export function dateToMs(value: unknown): number {
   return ms;
 }
 
-export interface SourceIdentity { host: string; port: string; database: string; schema: string }
+export interface SourceIdentity { host: string; port: string; database: string; schema: string; principal: string }
 export function sourceIdentity(databaseUrl: string): SourceIdentity {
   let url: URL;
   try { url = new URL(databaseUrl); } catch { throw new BackfillError("Invalid source database URL"); }
@@ -88,8 +88,13 @@ export function sourceIdentity(databaseUrl: string): SourceIdentity {
   let database: string;
   try { database = decodeURIComponent(url.pathname.slice(1)); } catch { throw new BackfillError("Invalid source database name"); }
   const schema = url.searchParams.get("schema") ?? "public";
-  requireSafe(url.hostname && database && schema, "Source identity is incomplete");
-  return { host: url.hostname.toLowerCase(), port: url.port || "5432", database, schema };
+  let principal: string;
+  try { principal = decodeURIComponent(url.username); } catch { throw new BackfillError("Invalid source database principal"); }
+  // Shared Supabase pooler hosts use the username to select the project. Omitting
+  // it can give two different databases the same fingerprint. Never retain the
+  // password or URL query secrets; the username stays only in the private archive.
+  requireSafe(url.hostname && database && schema && principal, "Source identity requires an explicit database principal");
+  return { host: url.hostname.toLowerCase(), port: url.port || "5432", database, schema, principal };
 }
 export function targetIdentity(rawUrl: string): string {
   let url: URL;
@@ -116,7 +121,7 @@ export function validateSnapshot(value: unknown): Snapshot {
   requireSafe(canonical(Object.keys(snapshot).sort()) === canonical(["version", "source", "sourceFingerprint", "capturedAt", "postgresSnapshot", "tables", "checksum"].sort()), "Unexpected snapshot envelope fields");
   const { checksum, ...data } = snapshot;
   requireSafe(snapshot.version === 1 && checksum === sha256(canonical(data)), "Snapshot checksum or version mismatch");
-  requireSafe(snapshot.source && canonical(Object.keys(snapshot.source).sort()) === canonical(["host", "port", "database", "schema"].sort()) && Object.values(snapshot.source).every(v => typeof v === "string" && v.length > 0), "Invalid source identity");
+  requireSafe(snapshot.source && canonical(Object.keys(snapshot.source).sort()) === canonical(["host", "port", "database", "schema", "principal"].sort()) && Object.values(snapshot.source).every(v => typeof v === "string" && v.length > 0), "Invalid source identity");
   requireSafe(snapshot.sourceFingerprint === sha256(canonical(snapshot.source)), "Source fingerprint mismatch");
   dateToMs(snapshot.capturedAt);
   requireSafe(typeof snapshot.postgresSnapshot === "string" && snapshot.postgresSnapshot.length > 0, "Missing PostgreSQL snapshot identity");

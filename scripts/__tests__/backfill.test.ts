@@ -13,7 +13,7 @@ import { hashFile, readPrivateJson, verifyBackup, writePrivateJson } from "../li
 
 const time = "2025-01-12T14:27:18.123Z";
 const later = "2025-01-13T15:28:19.234Z";
-const source = { host: "source.example.test", port: "5432", database: "tipout", schema: "public" };
+const source = { host: "source.example.test", port: "5432", database: "tipout", schema: "public", principal: "username" };
 function fixture(): Snapshot {
   return sealSnapshot({ version: 1, source, sourceFingerprint: sha256(canonical(source)), capturedAt: later, postgresSnapshot: "1:2:", tables: {
     roles: [{ id: "role-1", name: "Server", basePayRate: "15.250000000000000000000000000000", createdAt: time, updatedAt: later }],
@@ -126,6 +126,15 @@ describe("backfill validation and reconciliation", () => {
     expect(sourceIdentity("postgresql://username:TOP_SECRET@Db.EXAMPLE:5432/tipout?schema=public&password=SECRET")).toEqual({ ...source, host: "db.example" });
     for (const url of ["http://deployment.convex.cloud", "https://user:pass@deployment.convex.cloud", "https://deployment.convex.cloud/path", "https://deployment.convex.cloud?key=secret"]) expect(() => targetIdentity(url)).toThrow();
     expect(targetIdentity("https://deployment.convex.cloud/")).toBe("https://deployment.convex.cloud");
+  });
+  test("shared pooler projects have distinct identities while password rotation does not change identity", () => {
+    const first = sourceIdentity("postgresql://postgres.project_a:first@pooler.example/postgres");
+    const rotated = sourceIdentity("postgresql://postgres.project_a:second@pooler.example/postgres");
+    const other = sourceIdentity("postgresql://postgres.project_b:first@pooler.example/postgres");
+    expect(sha256(canonical(first))).toBe(sha256(canonical(rotated)));
+    expect(sha256(canonical(first))).not.toBe(sha256(canonical(other)));
+    expect(canonical(first)).not.toContain("first");
+    expect(() => sourceIdentity("postgresql://pooler.example/postgres")).toThrow("explicit database principal");
   });
   test("checkpoint refuses source/target drift, deleted observed rows and absent uncertain writes", () => {
     const snapshot = fixture(), actual = normalizeSource(snapshot.tables), url = "https://target.convex.cloud";

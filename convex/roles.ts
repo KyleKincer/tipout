@@ -4,6 +4,7 @@ import { serializeRoleBare, serializeRoleConfig, serializeRoleWithConfigs } from
 import { requireAdmin, requireAuthenticated } from "./lib/acl";
 import { roleWithConfigsValidator } from "./lib/validators";
 import type { Doc, Id } from "./_generated/dataModel";
+import { resolveLegacyDoc } from "./lib/legacyIds";
 
 async function getActiveConfigs(
   ctx: QueryCtx,
@@ -36,16 +37,16 @@ export const list = query({
 });
 
 export const get = query({
-  args: { id: v.id("roles") },
+  args: { id: v.string() },
   returns: v.union(roleWithConfigsValidator, v.null()),
   handler: async (ctx, { id }) => {
     await requireAuthenticated(ctx);
-    const role = await ctx.db.get(id);
+    const role = await resolveLegacyDoc(ctx, "roles", id);
     if (!role) return null;
     // The editor must round-trip closed configurations as well as current ones.
     const configs = await ctx.db
       .query("roleConfigs")
-      .withIndex("by_role", (q) => q.eq("roleId", id))
+      .withIndex("by_role", (q) => q.eq("roleId", role._id))
       .collect();
     return serializeRoleWithConfigs(role, configs);
   },
@@ -80,7 +81,7 @@ export const update = mutation({
     await requireAdmin(ctx);
     const existing = await ctx.db.get(id);
     if (!existing) throw new ConvexError("Role not found");
-    const patch: Record<string, unknown> = { updatedAt: Date.now() };
+    const patch: Record<string, unknown> = { updatedAt: Math.max(Date.now(), existing.updatedAt + 1) };
     if (name !== undefined) patch.name = name;
     if (basePayRate !== undefined) patch.basePayRate = basePayRate;
     await ctx.db.patch(id, patch);

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useMutation } from 'convex/react'
 import { useAuthenticatedQuery as useQuery } from '@/lib/useAuthenticatedQuery'
@@ -11,6 +11,7 @@ import type { Id } from '../../../../../../convex/_generated/dataModel'
 
 type EmployeeFormState = {
   id: Id<'employees'>
+  updatedAt: number
   name: string
   active: boolean
   defaultRoleId: Id<'roles'> | null
@@ -19,20 +20,23 @@ type EmployeeFormState = {
 export default function EditEmployeePage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter()
   const { id } = use(params)
-  const employeeId = id as Id<'employees'>
+  const employeeId = id
 
   const employeeData = useQuery(api.employees.get, { id: employeeId })
   const roles = useQuery(api.roles.list)
   const updateEmployee = useMutation(api.employees.update)
 
+  const hydratedEmployeeId = useRef<string | null>(null)
   const [employee, setEmployee] = useState<EmployeeFormState | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   useEffect(() => {
-    if (employeeData) {
+    if (employeeData && hydratedEmployeeId.current !== employeeData.id) {
+      hydratedEmployeeId.current = employeeData.id
       setEmployee({
         id: employeeData.id,
+        updatedAt: Date.parse(employeeData.updatedAt),
         name: employeeData.name,
         active: employeeData.active,
         defaultRoleId: employeeData.defaultRoleId,
@@ -45,6 +49,7 @@ export default function EditEmployeePage({ params }: { params: Promise<{ id: str
 
     setEmployee({
       id: employee.id,
+      updatedAt: employee.updatedAt,
       name: field === 'name' ? (value as string) : employee.name,
       active: field === 'active' ? (value as boolean) : employee.active,
       defaultRoleId:
@@ -60,6 +65,7 @@ export default function EditEmployeePage({ params }: { params: Promise<{ id: str
     try {
       await updateEmployee({
         id: employee.id,
+        expectedUpdatedAt: employee.updatedAt,
         name: employee.name,
         active: employee.active,
         defaultRoleId: employee.defaultRoleId,
@@ -68,7 +74,7 @@ export default function EditEmployeePage({ params }: { params: Promise<{ id: str
       router.push('/employees')
       router.refresh()
     } catch (err) {
-      setError('Failed to update employee')
+      setError(err instanceof Error ? err.message : 'Failed to update employee')
       console.error('Error updating employee:', err)
     } finally {
       setIsSubmitting(false)
@@ -76,6 +82,7 @@ export default function EditEmployeePage({ params }: { params: Promise<{ id: str
   }
 
   const isLoading = employeeData === undefined || roles === undefined
+  if (employeeData === null) return <div>Employee not found</div>
 
   return (
     <div className="px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">

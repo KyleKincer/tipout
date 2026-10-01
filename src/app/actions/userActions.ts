@@ -1,15 +1,9 @@
 "use server";
 
-import { auth, clerkClient } from "@clerk/nextjs/server";
+import { clerkClient } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
 import { UserRole } from "@/lib/roles";
-
-// Helper function to check if the current user is an admin
-async function isAdmin(): Promise<boolean> {
-  const session = await auth();
-  const roles = (session.sessionClaims?.metadata as any)?.roles as string[] | undefined;
-  return roles?.includes(UserRole.ADMIN) ?? false;
-}
+import { getRolesFromMetadata, isAdmin } from "@/lib/auth";
 
 export async function assignRole(formData: FormData): Promise<void> {
   const userId = formData.get("userId") as string;
@@ -31,7 +25,7 @@ export async function assignRole(formData: FormData): Promise<void> {
     // Optional: Fetch current roles to append/update correctly
     const clerk = await clerkClient();
     const user = await clerk.users.getUser(userId);
-    const currentRoles = (user.publicMetadata?.roles as string[]) || [];
+    const currentRoles = getRolesFromMetadata(user.publicMetadata);
 
     // Avoid duplicate roles
     const newRoles = [...new Set([...currentRoles, role])];
@@ -68,7 +62,7 @@ export async function removeRole(formData: FormData): Promise<void> {
   try {
     const clerk = await clerkClient();
     const user = await clerk.users.getUser(userId);
-    const currentRoles = (user.publicMetadata?.roles as string[]) || [];
+    const currentRoles = getRolesFromMetadata(user.publicMetadata);
     const newRoles = currentRoles.filter(r => r !== role);
 
     await clerk.users.updateUserMetadata(userId, {
@@ -84,4 +78,4 @@ export async function removeRole(formData: FormData): Promise<void> {
   } catch (error) {
     console.error("Error removing role:", error);
   }
-} 
+}

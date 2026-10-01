@@ -32,7 +32,7 @@ export function serializeRoleConfig(doc: Doc<"roleConfigs">) {
     tipoutType: doc.tipoutType,
     percentageRate: doc.percentageRate,
     effectiveFrom: new Date(doc.effectiveFrom).toISOString(),
-    effectiveTo: doc.effectiveTo ? new Date(doc.effectiveTo).toISOString() : null,
+    effectiveTo: doc.effectiveTo != null ? new Date(doc.effectiveTo).toISOString() : null,
     receivesTipout: doc.receivesTipout,
     paysTipout: doc.paysTipout,
     distributionGroup: doc.distributionGroup ?? null,

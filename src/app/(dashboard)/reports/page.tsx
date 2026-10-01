@@ -4,9 +4,8 @@ import { useState, useEffect, Suspense } from 'react'
 import { format } from 'date-fns'
 import Link from 'next/link'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
-import { useQuery } from 'convex/react'
+import { useAuthenticatedQuery as useQuery } from '@/lib/useAuthenticatedQuery'
 import { api } from '../../../../convex/_generated/api'
-import type { Id } from '../../../../convex/_generated/dataModel'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import {
   Chart as ChartJS,
@@ -78,7 +77,6 @@ function ReportsContent() {
   const reportData = useQuery(api.reports.get, {
     startDate: filters.startDate,
     endDate: isDateRange ? filters.endDate : filters.startDate,
-    employeeId: filters.employeeId ? (filters.employeeId as Id<'employees'>) : undefined,
   })
 
   const isLoading = reportData === undefined

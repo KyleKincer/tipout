@@ -2,7 +2,8 @@
 
 import { useState } from 'react'
 import { PlusIcon, XCircleIcon } from '@heroicons/react/24/outline'
-import { useMutation, useQuery } from 'convex/react'
+import { useMutation } from 'convex/react'
+import { useAuthenticatedQuery as useQuery } from '@/lib/useAuthenticatedQuery'
 import type { FunctionReturnType } from 'convex/server'
 import { api } from '../../../../convex/_generated/api'
 import type { Id } from '../../../../convex/_generated/dataModel'
@@ -11,7 +12,7 @@ import { AdminOnly } from '@/components/RoleBasedUI'
 
 type Role = FunctionReturnType<typeof api.roles.list>[number]
 type RoleConfig = Role['configs'][number]
-type TipoutType = RoleConfig['tipoutType']
+type TipoutType = Exclude<RoleConfig['tipoutType'], ''>
 
 const TIPOUT_TYPES: { id: TipoutType; name: string; description: string }[] = [
   { id: 'bar', name: 'Bar Tipout', description: 'Percentage of liquor sales' },
@@ -19,38 +20,13 @@ const TIPOUT_TYPES: { id: TipoutType; name: string; description: string }[] = [
   { id: 'sa', name: 'Server Assistant Tipout', description: 'Percentage of total tips' },
 ]
 
-// Build the payload for replaceForRole based on the role's currently-active configs.
-// Active configs are the ones returned by roles.list (which filters effectiveTo == null server-side).
-type ReplaceConfig = {
-  tipoutType: TipoutType
-  percentageRate: number
-  effectiveFrom: string
-  effectiveTo: string | null
-  receivesTipout: boolean
-  paysTipout: boolean
-  distributionGroup?: string | null
-  tipPoolGroup?: string | null
-}
-
-function configsToReplacePayload(configs: RoleConfig[]): ReplaceConfig[] {
-  return configs.map((c) => ({
-    tipoutType: c.tipoutType,
-    percentageRate: c.percentageRate,
-    effectiveFrom: c.effectiveFrom,
-    effectiveTo: c.effectiveTo,
-    receivesTipout: c.receivesTipout,
-    paysTipout: c.paysTipout,
-    distributionGroup: c.distributionGroup,
-    tipPoolGroup: c.tipPoolGroup,
-  }))
-}
-
 export default function RolesPage() {
   const roles = useQuery(api.roles.list)
   const createRole = useMutation(api.roles.create)
   const updateRole = useMutation(api.roles.update)
   const removeRole = useMutation(api.roles.remove)
-  const replaceConfigs = useMutation(api.roleConfigs.replaceForRole)
+  const setCurrentConfig = useMutation(api.roleConfigs.setCurrent)
+  const endCurrentConfig = useMutation(api.roleConfigs.endCurrent)
 
   const [error, setError] = useState<string | null>(null)
   const [isAddingRole, setIsAddingRole] = useState(false)
@@ -82,42 +58,16 @@ export default function RolesPage() {
     }
   }
 
-  // Add or update a single tipout config for a role.
-  // Because Convex exposes only replaceForRole, we merge the change into the full
-  // list of active configs for the role, preserving flags (receivesTipout, paysTipout,
-  // distributionGroup, tipPoolGroup). If no active config exists for the type yet, we
-  // create one with sensible defaults mirroring the legacy POST /api/roles/[id]/configurations behaviour.
+  // Keep the legacy temporal behavior: end the old rate and begin a new one.
   const handleAddConfig = async (
     e: React.FormEvent,
     roleId: Id<'roles'>,
     tipoutType: TipoutType,
   ) => {
     e.preventDefault()
-    if (!editingConfig?.percentageRate || !roles) return
-
-    const role = roles.find((r) => r.id === roleId)
-    if (!role) return
-
-    const nowIso = new Date().toISOString()
-    const existing = role.configs.find((c) => c.tipoutType === tipoutType)
-    const nextConfigs: ReplaceConfig[] = configsToReplacePayload(role.configs).filter(
-      (c) => c.tipoutType !== tipoutType,
-    )
-
-    nextConfigs.push({
-      tipoutType,
-      percentageRate: parseFloat(editingConfig.percentageRate),
-      effectiveFrom: existing?.effectiveFrom ?? nowIso,
-      effectiveTo: null,
-      // Preserve existing flags if a config already exists; otherwise default to "pays tipout".
-      receivesTipout: existing?.receivesTipout ?? false,
-      paysTipout: existing?.paysTipout ?? true,
-      distributionGroup: existing?.distributionGroup ?? null,
-      tipPoolGroup: existing?.tipPoolGroup ?? null,
-    })
-
+    if (!editingConfig?.percentageRate) return
     try {
-      await replaceConfigs({ roleId, configs: nextConfigs })
+      await setCurrentConfig({ roleId, tipoutType, percentageRate: parseFloat(editingConfig.percentageRate) })
       setEditingConfig(null)
     } catch (err) {
       setError('Failed to add configuration')
@@ -126,20 +76,9 @@ export default function RolesPage() {
   }
 
   const handleRemoveConfig = async (roleId: Id<'roles'>, tipoutType: TipoutType) => {
-    if (!confirm('Are you sure you want to remove this tipout configuration?')) {
-      return
-    }
-    if (!roles) return
-
-    const role = roles.find((r) => r.id === roleId)
-    if (!role) return
-
-    const nextConfigs: ReplaceConfig[] = configsToReplacePayload(role.configs).filter(
-      (c) => c.tipoutType !== tipoutType,
-    )
-
+    if (!confirm('Are you sure you want to remove this tipout configuration?')) return
     try {
-      await replaceConfigs({ roleId, configs: nextConfigs })
+      await endCurrentConfig({ roleId, tipoutType })
     } catch (err) {
       setError('Failed to remove configuration')
       console.error('Error removing configuration:', err)

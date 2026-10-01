@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { useMutation, useQuery } from 'convex/react'
+import { useMutation } from 'convex/react'
+import { useAuthenticatedQuery as useQuery } from '@/lib/useAuthenticatedQuery'
 import { use } from 'react'
 import { XCircleIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline'
 import { api } from '../../../../../../convex/_generated/api'

@@ -12,7 +12,8 @@ export default defineSchema({
     updatedAt: v.number(),
   })
     .index("by_legacy", ["legacyId"])
-    .index("by_active", ["active"]),
+    .index("by_active", ["active"])
+    .index("by_default_role", ["defaultRoleId"]),
 
   roles: defineTable({
     name: v.string(),
@@ -46,6 +47,7 @@ export default defineSchema({
   roleConfigs: defineTable({
     roleId: v.id("roles"),
     tipoutType: v.union(
+      v.literal(""), // Legacy pool-only configuration, with no tipout rule.
       v.literal("bar"),
       v.literal("host"),
       v.literal("sa"),

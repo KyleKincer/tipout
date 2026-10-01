@@ -4,12 +4,14 @@ import { useEffect, useState, Suspense } from 'react'
 import { format } from 'date-fns'
 import Link from 'next/link'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
-import { useMutation, useQuery } from 'convex/react'
+import { useMutation } from 'convex/react'
+import { useAuthenticatedQuery as useQuery } from '@/lib/useAuthenticatedQuery'
 import type { FunctionReturnType } from 'convex/server'
 import { api } from '../../../../convex/_generated/api'
 import type { Id } from '../../../../convex/_generated/dataModel'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import { AdminOnly } from '@/components/RoleBasedUI'
+import { getShiftReportHref } from '@/lib/shiftReportLink'
 import { calculateTipouts, roleReceivesTipoutType } from '@/lib/tipoutCalculations'
 
 type Shift = FunctionReturnType<typeof api.shifts.list>[number]
@@ -68,7 +70,11 @@ function ShiftsContent() {
   const router = useRouter()
   const pathname = usePathname()
 
-  const [isDateRange, setIsDateRange] = useState(false)
+  const [isDateRange, setIsDateRange] = useState(() => {
+    const start = searchParams.get('startDate')
+    const end = searchParams.get('endDate')
+    return !!(start && end && start !== end)
+  })
   const [filters, setFilters] = useState(() => {
     return {
       startDate: searchParams.get('startDate') || format(new Date(), 'yyyy-MM-dd'),
@@ -151,8 +157,17 @@ function ShiftsContent() {
         <div className="sm:flex-auto">
           <h1 className="text-2xl font-semibold text-[var(--foreground)]">shifts</h1>
           <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
-            view and manage employee shifts and tipouts.
+            view and manage employee shifts and tipouts paid.
           </p>
+          <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
+            This table shows tipouts paid from each shift, not tipouts received. A $0.00 here does not mean the employee received no tipout. Reports includes received tipouts and final payroll totals.
+          </p>
+          <Link
+            href={getShiftReportHref(filters, isDateRange)}
+            className="mt-2 inline-block text-sm font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300"
+          >
+            View received tipouts and payroll totals in Reports
+          </Link>
         </div>
         <div className="mt-4 sm:ml-16 sm:mt-0 sm:flex-none">
           <Link
@@ -341,13 +356,13 @@ function ShiftsContent() {
                     liquor sales
                   </th>
                   <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                    bar tipout
+                    bar tipout paid
                   </th>
                   <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                    host tipout
+                    host tipout paid
                   </th>
                   <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                    sa tipout
+                    sa tipout paid
                   </th>
                   <AdminOnly>
                     <th scope="col" className="relative py-3.5 pl-3 pr-4 sm:pr-6">

@@ -1,13 +1,14 @@
 import { v, ConvexError } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { serializeEmployee } from "./lib/serialize";
-import { requireAdmin } from "./lib/acl";
+import { requireAdmin, requireAuthenticated } from "./lib/acl";
 import { employeeValidator } from "./lib/validators";
 
 export const list = query({
   args: {},
   returns: v.array(employeeValidator),
   handler: async (ctx) => {
+    await requireAuthenticated(ctx);
     const employees = await ctx.db.query("employees").collect();
     employees.sort((a, b) => a.name.localeCompare(b.name));
     const results = [];
@@ -25,6 +26,7 @@ export const get = query({
   args: { id: v.id("employees") },
   returns: v.union(employeeValidator, v.null()),
   handler: async (ctx, { id }) => {
+    await requireAuthenticated(ctx);
     const employee = await ctx.db.get(id);
     if (!employee) return null;
     const defaultRole = employee.defaultRoleId
@@ -65,6 +67,9 @@ export const update = mutation({
     await requireAdmin(ctx);
     const existing = await ctx.db.get(id);
     if (!existing) throw new ConvexError("Employee not found");
+    if (defaultRoleId && !(await ctx.db.get(defaultRoleId))) {
+      throw new ConvexError("Default role not found");
+    }
     const patch: Record<string, unknown> = { updatedAt: Date.now() };
     if (name !== undefined) patch.name = name;
     if (active !== undefined) patch.active = active;

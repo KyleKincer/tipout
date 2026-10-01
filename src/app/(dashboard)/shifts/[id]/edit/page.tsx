@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useRef, use } from 'react'
 import { useRouter } from 'next/navigation'
-import { useMutation, useQuery } from 'convex/react'
+import { useMutation } from 'convex/react'
+import { useAuthenticatedQuery as useQuery } from '@/lib/useAuthenticatedQuery'
 import type { FunctionReturnType } from 'convex/server'
 import { format } from 'date-fns'
 import ShiftEntryForm from '@/components/ShiftEntryForm'

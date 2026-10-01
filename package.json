@@ -8,7 +8,11 @@
     "start": "next start",
     "lint": "next lint",
     "test": "jest",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "migrate:convex": "node --import tsx scripts/migrate-to-convex.ts",
+    "parity:reports": "node --import tsx scripts/parity-reports.ts",
+    "test:backfill": "jest scripts/__tests__/backfill --runInBand",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@clerk/nextjs": "^6.12.10",
@@ -44,6 +48,7 @@
     "supabase": "^2.19.7",
     "tailwindcss": "^4",
     "ts-jest": "^29.3.1",
+    "tsx": "^4.23.15",
     "typescript": "^5"
   }
 }

@@ -1,268 +1,142 @@
+import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
 import { internalMutation, internalQuery } from "./_generated/server";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 
-// ETL helpers — resumable Postgres → Convex upserts keyed by `legacyId`.
-// The public mutations (roles.create, employees.create, …) enforce admin
-// auth; ETL runs with a service token from a script, so we use internal*
-// functions that bypass client-exposed auth and can be driven by the
-// deploy key from a Node script.
+// Administrative, insert-only backfill functions. The old upsert names remain,
+// but differing rows are NEVER patched. Disable TIPOUT_ETL_ENABLED after use.
+const migrationGate = v.object({
+  sourceFingerprint: v.string(), snapshotChecksum: v.string(), targetUrl: v.string(),
+});
+type Gate = { sourceFingerprint: string; snapshotChecksum: string; targetUrl: string };
+type Table = "roles" | "employees" | "roleConfigs" | "shifts";
+function assertGate(gate: Gate) {
+  if (process.env.TIPOUT_ETL_ENABLED !== "true" ||
+      !/^[a-f0-9]{64}$/.test(gate.sourceFingerprint) ||
+      !/^[a-f0-9]{64}$/.test(gate.snapshotChecksum) ||
+      gate.sourceFingerprint !== process.env.TIPOUT_ETL_SOURCE_FINGERPRINT ||
+      gate.snapshotChecksum !== process.env.TIPOUT_ETL_SNAPSHOT_SHA256 ||
+      gate.targetUrl !== process.env.CONVEX_CLOUD_URL?.replace(/\/$/, "")) {
+    throw new Error("Backfill disabled or source/snapshot/target gate mismatch");
+  }
+}
+function assertValues(doc: Record<string, unknown>) {
+  if (typeof doc.legacyId !== "string" || doc.legacyId.length === 0) throw new Error("Missing legacy identity");
+  for (const [field, value] of Object.entries(doc)) {
+    if (typeof value === "number" && !Number.isFinite(value)) throw new Error("Non-finite backfill number");
+    if (["date", "createdAt", "updatedAt", "effectiveFrom", "effectiveTo"].includes(field) && value !== undefined && value !== null &&
+        (typeof value !== "number" || !Number.isSafeInteger(value) || !Number.isFinite(new Date(value).getTime()))) {
+      throw new Error("Invalid backfill timestamp");
+    }
+  }
+  if ((doc.updatedAt as number) < (doc.createdAt as number)) throw new Error("Reversed audit timestamps");
+}
+async function lookup(ctx: QueryCtx | MutationCtx, table: Table, legacyId: string) {
+  const rows = await ctx.db.query(table).withIndex("by_legacy", q => q.eq("legacyId", legacyId)).take(2);
+  if (rows.length > 1) throw new Error("Duplicate target legacy identity; stopped without overwriting");
+  return rows[0] ?? null;
+}
+function assertIdentical(existing: Record<string, unknown>, wanted: Record<string, unknown>) {
+  const keys = new Set([...Object.keys(existing), ...Object.keys(wanted)]);
+  for (const key of keys) {
+    if (key === "_id" || key === "_creationTime") continue;
+    if (existing[key] !== wanted[key]) throw new Error("Target row conflicts with snapshot; stopped without overwriting");
+  }
+}
+async function roleId(ctx: MutationCtx, legacyId: string): Promise<Id<"roles">> {
+  const row = await lookup(ctx, "roles", legacyId);
+  if (!row) throw new Error("Missing target role relationship");
+  return row._id as Id<"roles">;
+}
 
-export const lookupRoleByLegacy = internalQuery({
-  args: { legacyId: v.string() },
-  returns: v.union(v.id("roles"), v.null()),
-  handler: async (ctx, { legacyId }) => {
-    const row = await ctx.db
-      .query("roles")
-      .withIndex("by_legacy", (q) => q.eq("legacyId", legacyId))
-      .first();
-    return row ? row._id : null;
-  },
+export const identity = internalQuery({
+  args: {},
+  handler: async () => ({
+    protocolVersion: 1,
+    deploymentUrl: process.env.CONVEX_CLOUD_URL ?? null,
+    enabled: process.env.TIPOUT_ETL_ENABLED === "true",
+    sourceFingerprint: process.env.TIPOUT_ETL_SOURCE_FINGERPRINT ?? null,
+    snapshotChecksum: process.env.TIPOUT_ETL_SNAPSHOT_SHA256 ?? null,
+  }),
 });
 
-export const lookupEmployeeByLegacy = internalQuery({
-  args: { legacyId: v.string() },
-  returns: v.union(v.id("employees"), v.null()),
-  handler: async (ctx, { legacyId }) => {
-    const row = await ctx.db
-      .query("employees")
-      .withIndex("by_legacy", (q) => q.eq("legacyId", legacyId))
-      .first();
-    return row ? row._id : null;
+// Every page is transactionally consistent; a series of pages is NOT one
+// snapshot. The runner requires a maintenance freeze for apply, compares two
+// full reads, checks each write, and reconciles afterwards. No global lock is
+// claimed. Pages include native IDs for stable relationship/parity mapping.
+export const auditPage = internalQuery({
+  args: {
+    table: v.union(v.literal("roles"), v.literal("employees"), v.literal("roleConfigs"), v.literal("shifts")),
+    paginationOpts: paginationOptsValidator,
   },
-});
-
-export const lookupShiftByLegacy = internalQuery({
-  args: { legacyId: v.string() },
-  returns: v.union(v.id("shifts"), v.null()),
-  handler: async (ctx, { legacyId }) => {
-    const row = await ctx.db
-      .query("shifts")
-      .withIndex("by_legacy", (q) => q.eq("legacyId", legacyId))
-      .first();
-    return row ? row._id : null;
-  },
-});
-
-export const lookupRoleConfigByLegacy = internalQuery({
-  args: { legacyId: v.string() },
-  returns: v.union(v.id("roleConfigs"), v.null()),
-  handler: async (ctx, { legacyId }) => {
-    const row = await ctx.db
-      .query("roleConfigs")
-      .withIndex("by_legacy", (q) => q.eq("legacyId", legacyId))
-      .first();
-    return row ? row._id : null;
+  handler: async (ctx, args) => {
+    if (args.paginationOpts.numItems < 1 || args.paginationOpts.numItems > 500) throw new Error("Audit page size must be 1–500");
+    return await ctx.db.query(args.table).paginate(args.paginationOpts);
   },
 });
 
 export const upsertRole = internalMutation({
-  args: {
-    legacyId: v.string(),
-    name: v.string(),
-    basePayRate: v.number(),
-    createdAt: v.number(),
-    updatedAt: v.number(),
-  },
+  args: { migration: migrationGate, legacyId: v.string(), name: v.string(), basePayRate: v.number(), createdAt: v.number(), updatedAt: v.number() },
   returns: v.id("roles"),
-  handler: async (ctx, args) => {
-    const existing = await ctx.db
-      .query("roles")
-      .withIndex("by_legacy", (q) => q.eq("legacyId", args.legacyId))
-      .first();
-    if (existing) {
-      await ctx.db.patch(existing._id, {
-        name: args.name,
-        basePayRate: args.basePayRate,
-        updatedAt: args.updatedAt,
-      });
-      return existing._id;
-    }
-    return await ctx.db.insert("roles", args);
+  handler: async (ctx, { migration, ...doc }) => {
+    assertGate(migration); assertValues(doc);
+    const existing = await lookup(ctx, "roles", doc.legacyId);
+    if (existing) { assertIdentical(existing, doc); return existing._id as Id<"roles">; }
+    return await ctx.db.insert("roles", doc);
   },
 });
 
 export const upsertEmployee = internalMutation({
-  args: {
-    legacyId: v.string(),
-    name: v.string(),
-    active: v.boolean(),
-    defaultRoleLegacyId: v.union(v.string(), v.null()),
-    createdAt: v.number(),
-    updatedAt: v.number(),
-  },
+  args: { migration: migrationGate, legacyId: v.string(), name: v.string(), active: v.boolean(), defaultRoleLegacyId: v.union(v.string(), v.null()), createdAt: v.number(), updatedAt: v.number() },
   returns: v.id("employees"),
-  handler: async (ctx, args) => {
-    let defaultRoleId: Id<"roles"> | undefined;
-    if (args.defaultRoleLegacyId) {
-      const role = await ctx.db
-        .query("roles")
-        .withIndex("by_legacy", (q) => q.eq("legacyId", args.defaultRoleLegacyId!))
-        .first();
-      if (!role) {
-        throw new Error(
-          `Employee ${args.legacyId} references unknown role ${args.defaultRoleLegacyId}`,
-        );
-      }
-      defaultRoleId = role._id;
-    }
-    const existing = await ctx.db
-      .query("employees")
-      .withIndex("by_legacy", (q) => q.eq("legacyId", args.legacyId))
-      .first();
-    const patch = {
-      name: args.name,
-      active: args.active,
-      defaultRoleId,
-      updatedAt: args.updatedAt,
-    };
-    if (existing) {
-      await ctx.db.patch(existing._id, patch);
-      return existing._id;
-    }
-    return await ctx.db.insert("employees", {
-      legacyId: args.legacyId,
-      createdAt: args.createdAt,
-      ...patch,
-    });
+  handler: async (ctx, { migration, defaultRoleLegacyId, ...fields }) => {
+    assertGate(migration); assertValues(fields);
+    const doc = { ...fields, defaultRoleId: defaultRoleLegacyId === null ? undefined : await roleId(ctx, defaultRoleLegacyId) };
+    const existing = await lookup(ctx, "employees", doc.legacyId);
+    if (existing) { assertIdentical(existing, doc); return existing._id as Id<"employees">; }
+    return await ctx.db.insert("employees", doc);
   },
 });
 
 export const upsertRoleConfig = internalMutation({
   args: {
-    legacyId: v.string(),
-    roleLegacyId: v.string(),
-    tipoutType: v.union(
-      v.literal("bar"),
-      v.literal("host"),
-      v.literal("sa"),
-    ),
-    percentageRate: v.number(),
-    effectiveFrom: v.number(),
-    effectiveTo: v.union(v.number(), v.null()),
-    receivesTipout: v.boolean(),
-    paysTipout: v.boolean(),
-    distributionGroup: v.union(v.string(), v.null()),
-    tipPoolGroup: v.union(v.string(), v.null()),
-    createdAt: v.number(),
-    updatedAt: v.number(),
+    migration: migrationGate, legacyId: v.string(), roleLegacyId: v.string(),
+    tipoutType: v.union(v.literal(""), v.literal("bar"), v.literal("host"), v.literal("sa")),
+    percentageRate: v.number(), effectiveFrom: v.number(), effectiveTo: v.union(v.number(), v.null()),
+    receivesTipout: v.boolean(), paysTipout: v.boolean(), distributionGroup: v.union(v.string(), v.null()), tipPoolGroup: v.union(v.string(), v.null()), createdAt: v.number(), updatedAt: v.number(),
   },
   returns: v.id("roleConfigs"),
-  handler: async (ctx, args) => {
-    const role = await ctx.db
-      .query("roles")
-      .withIndex("by_legacy", (q) => q.eq("legacyId", args.roleLegacyId))
-      .first();
-    if (!role) {
-      throw new Error(
-        `RoleConfig ${args.legacyId} references unknown role ${args.roleLegacyId}`,
-      );
-    }
+  handler: async (ctx, { migration, roleLegacyId, effectiveTo, distributionGroup, tipPoolGroup, ...fields }) => {
+    assertGate(migration); assertValues({ ...fields, effectiveTo });
+    if (effectiveTo !== null && effectiveTo < fields.effectiveFrom) throw new Error("Reversed effective interval");
     const doc: Omit<Doc<"roleConfigs">, "_id" | "_creationTime"> = {
-      legacyId: args.legacyId,
-      roleId: role._id,
-      tipoutType: args.tipoutType,
-      percentageRate: args.percentageRate,
-      effectiveFrom: args.effectiveFrom,
-      effectiveTo: args.effectiveTo ?? undefined,
-      receivesTipout: args.receivesTipout,
-      paysTipout: args.paysTipout,
-      distributionGroup: args.distributionGroup ?? undefined,
-      tipPoolGroup: args.tipPoolGroup ?? undefined,
-      createdAt: args.createdAt,
-      updatedAt: args.updatedAt,
+      ...fields, roleId: await roleId(ctx, roleLegacyId), effectiveTo: effectiveTo ?? undefined,
+      distributionGroup: distributionGroup ?? undefined, tipPoolGroup: tipPoolGroup ?? undefined,
     };
-    const existing = await ctx.db
-      .query("roleConfigs")
-      .withIndex("by_legacy", (q) => q.eq("legacyId", args.legacyId))
-      .first();
-    if (existing) {
-      const { legacyId: _lid, createdAt: _ca, ...patch } = doc;
-      await ctx.db.patch(existing._id, patch);
-      return existing._id;
-    }
+    const collisions = await ctx.db.query("roleConfigs")
+      .withIndex("by_role_type", q => q.eq("roleId", doc.roleId).eq("tipoutType", doc.tipoutType))
+      .filter(q => q.eq(q.field("effectiveFrom"), doc.effectiveFrom)).take(2);
+    if (collisions.some(row => row.legacyId !== doc.legacyId) || collisions.length > 1) throw new Error("Target RoleConfig compound identity collision");
+    const existing = await lookup(ctx, "roleConfigs", doc.legacyId!);
+    if (existing) { assertIdentical(existing, doc); return existing._id as Id<"roleConfigs">; }
     return await ctx.db.insert("roleConfigs", doc);
   },
 });
 
 export const upsertShift = internalMutation({
   args: {
-    legacyId: v.string(),
-    employeeLegacyId: v.string(),
-    roleLegacyId: v.string(),
-    date: v.number(),
-    hours: v.number(),
-    cashTips: v.number(),
-    creditTips: v.number(),
-    liquorSales: v.number(),
-    createdAt: v.number(),
-    updatedAt: v.number(),
+    migration: migrationGate, legacyId: v.string(), employeeLegacyId: v.string(), roleLegacyId: v.string(), date: v.number(),
+    hours: v.number(), cashTips: v.number(), creditTips: v.number(), liquorSales: v.number(), createdAt: v.number(), updatedAt: v.number(),
   },
   returns: v.id("shifts"),
-  handler: async (ctx, args) => {
-    const employee = await ctx.db
-      .query("employees")
-      .withIndex("by_legacy", (q) => q.eq("legacyId", args.employeeLegacyId))
-      .first();
-    if (!employee) {
-      throw new Error(
-        `Shift ${args.legacyId} references unknown employee ${args.employeeLegacyId}`,
-      );
-    }
-    const role = await ctx.db
-      .query("roles")
-      .withIndex("by_legacy", (q) => q.eq("legacyId", args.roleLegacyId))
-      .first();
-    if (!role) {
-      throw new Error(
-        `Shift ${args.legacyId} references unknown role ${args.roleLegacyId}`,
-      );
-    }
-    const doc: Omit<Doc<"shifts">, "_id" | "_creationTime"> = {
-      legacyId: args.legacyId,
-      employeeId: employee._id,
-      roleId: role._id,
-      date: args.date,
-      hours: args.hours,
-      cashTips: args.cashTips,
-      creditTips: args.creditTips,
-      liquorSales: args.liquorSales,
-      createdAt: args.createdAt,
-      updatedAt: args.updatedAt,
-    };
-    const existing = await ctx.db
-      .query("shifts")
-      .withIndex("by_legacy", (q) => q.eq("legacyId", args.legacyId))
-      .first();
-    if (existing) {
-      const { legacyId: _lid, createdAt: _ca, ...patch } = doc;
-      await ctx.db.patch(existing._id, patch);
-      return existing._id;
-    }
+  handler: async (ctx, { migration, employeeLegacyId, roleLegacyId, ...fields }) => {
+    assertGate(migration); assertValues(fields);
+    const employee = await lookup(ctx, "employees", employeeLegacyId);
+    if (!employee) throw new Error("Missing target employee relationship");
+    const doc = { ...fields, employeeId: employee._id as Id<"employees">, roleId: await roleId(ctx, roleLegacyId) };
+    const existing = await lookup(ctx, "shifts", doc.legacyId);
+    if (existing) { assertIdentical(existing, doc); return existing._id as Id<"shifts">; }
     return await ctx.db.insert("shifts", doc);
-  },
-});
-
-export const countsByTable = internalQuery({
-  args: {},
-  returns: v.object({
-    roles: v.number(),
-    employees: v.number(),
-    roleConfigs: v.number(),
-    shifts: v.number(),
-  }),
-  handler: async (ctx) => {
-    const [roles, employees, roleConfigs, shifts] = await Promise.all([
-      ctx.db.query("roles").collect(),
-      ctx.db.query("employees").collect(),
-      ctx.db.query("roleConfigs").collect(),
-      ctx.db.query("shifts").collect(),
-    ]);
-    return {
-      roles: roles.length,
-      employees: employees.length,
-      roleConfigs: roleConfigs.length,
-      shifts: shifts.length,
-    };
   },
 });

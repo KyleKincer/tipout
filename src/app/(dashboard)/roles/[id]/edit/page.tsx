@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { useMutation, useQuery } from 'convex/react'
+import { useMutation } from 'convex/react'
+import { useAuthenticatedQuery as useQuery } from '@/lib/useAuthenticatedQuery'
 import { api } from '../../../../../../convex/_generated/api'
 import type { Id } from '../../../../../../convex/_generated/dataModel'
 import LoadingSpinner from '@/components/LoadingSpinner'
@@ -10,6 +11,7 @@ import LoadingSpinner from '@/components/LoadingSpinner'
 type TipoutType = 'bar' | 'host' | 'sa'
 
 type RoleConfigDraft = {
+  id?: Id<'roleConfigs'>
   tipoutType: TipoutType | ''
   percentageRate: number
   effectiveFrom: string
@@ -20,9 +22,10 @@ type RoleConfigDraft = {
   tipPoolGroup: string | null
 }
 
-// What replaceForRole accepts (must have a concrete tipoutType)
+// Empty tipoutType is a persisted legacy pool-only configuration.
 type ReplaceConfig = {
-  tipoutType: TipoutType
+  id?: Id<'roleConfigs'>
+  tipoutType: TipoutType | ''
   percentageRate: number
   effectiveFrom: string
   effectiveTo: string | null
@@ -52,6 +55,8 @@ export default function EditRolePage() {
     basePayRate: 0,
   })
   const [configs, setConfigs] = useState<RoleConfigDraft[]>([])
+  const [historicalConfigs, setHistoricalConfigs] = useState<RoleConfigDraft[]>([])
+  const hydratedRole = useRef<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [hydrated, setHydrated] = useState(isNew)
 
@@ -59,28 +64,35 @@ export default function EditRolePage() {
   const distributionGroups = ['bartenders', 'hosts', 'servers', 'support']
   const existingPoolGroups = poolGroupsData ?? []
 
-  // Hydrate form state once the role query resolves.
+  // Hydrate once per role. Live query updates must not erase unsaved edits.
   useEffect(() => {
-    if (isNew || !roleData) return
-    setRole({
-      id: roleData.id,
-      name: roleData.name,
-      basePayRate: Number(roleData.basePayRate),
-    })
-    setConfigs(
-      roleData.configs.map((config) => ({
-        tipoutType: config.tipoutType,
-        percentageRate: Number(config.percentageRate),
-        effectiveFrom: new Date(config.effectiveFrom).toISOString().split('T')[0],
-        effectiveTo: config.effectiveTo
-          ? new Date(config.effectiveTo).toISOString().split('T')[0]
-          : null,
-        receivesTipout: config.receivesTipout,
-        paysTipout: config.paysTipout,
-        distributionGroup: config.distributionGroup,
-        tipPoolGroup: config.tipPoolGroup,
-      })),
-    )
+    if (isNew) {
+      if (hydratedRole.current !== 'new') {
+        setRole({ id: '', name: '', basePayRate: 0 })
+        setConfigs([])
+        setHistoricalConfigs([])
+        setHydrated(true)
+        hydratedRole.current = 'new'
+      }
+      return
+    }
+    if (!roleData || hydratedRole.current === roleData.id) return
+    setRole({ id: roleData.id, name: roleData.name, basePayRate: Number(roleData.basePayRate) })
+    const allConfigs: RoleConfigDraft[] = roleData.configs.map((config) => ({
+      id: config.id,
+      tipoutType: config.tipoutType,
+      percentageRate: Number(config.percentageRate),
+      // Preserve instants exactly; truncating to a calendar day changes old payroll.
+      effectiveFrom: config.effectiveFrom,
+      effectiveTo: config.effectiveTo,
+      receivesTipout: config.receivesTipout,
+      paysTipout: config.paysTipout,
+      distributionGroup: config.distributionGroup,
+      tipPoolGroup: config.tipPoolGroup,
+    }))
+    setConfigs(allConfigs.filter((config) => config.effectiveTo === null))
+    setHistoricalConfigs(allConfigs.filter((config) => config.effectiveTo !== null))
+    hydratedRole.current = roleData.id
     setHydrated(true)
   }, [isNew, roleData])
 
@@ -107,12 +119,10 @@ export default function EditRolePage() {
         savedRoleId = updated.id
       }
 
-      // Save the configurations.
-      // replaceForRole only accepts configs with a real tipoutType; drop drafts that are only
-      // there to carry the tipPoolGroup input with no tipout rule.
-      const payloadConfigs: ReplaceConfig[] = configs
-        .filter((c): c is RoleConfigDraft & { tipoutType: TipoutType } => c.tipoutType !== '')
+      // Keep closed history and pool-only configurations in the complete payload.
+      const payloadConfigs: ReplaceConfig[] = [...historicalConfigs, ...configs]
         .map((c) => ({
+          id: c.id,
           tipoutType: c.tipoutType,
           percentageRate: c.percentageRate,
           effectiveFrom: c.effectiveFrom,
@@ -131,7 +141,7 @@ export default function EditRolePage() {
     }
   }
 
-  if (!isNew && (roleData === undefined || !hydrated)) {
+  if (!isNew && (roleData === undefined || (roleData !== null && !hydrated))) {
     return <LoadingSpinner />
   }
 

@@ -1,7 +1,7 @@
 import { v, ConvexError } from "convex/values";
 import { mutation, query, type QueryCtx, type MutationCtx } from "./_generated/server";
 import { parseDateInput, parseEndOfDay, serializeShift } from "./lib/serialize";
-import { requireAdmin } from "./lib/acl";
+import { requireAdmin, requireAuthenticated } from "./lib/acl";
 import { shiftValidator } from "./lib/validators";
 import type { Doc } from "./_generated/dataModel";
 
@@ -35,6 +35,7 @@ export const list = query({
   },
   returns: v.array(shiftValidator),
   handler: async (ctx, { startDate, endDate, employeeId, role }) => {
+    await requireAuthenticated(ctx);
     let shifts: Doc<"shifts">[];
     if (startDate && endDate) {
       const start = parseDateInput(startDate);
@@ -83,6 +84,7 @@ export const get = query({
   args: { id: v.id("shifts") },
   returns: v.union(shiftValidator, v.null()),
   handler: async (ctx, { id }) => {
+    await requireAuthenticated(ctx);
     const shift = await ctx.db.get(id);
     if (!shift) return null;
     return hydrateShift(ctx, shift);

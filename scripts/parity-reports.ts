@@ -26,7 +26,7 @@ import { ConvexHttpClient } from "convex/browser";
 import { anyApi } from "convex/server";
 import {
   calculateOverallSummary,
-  calculateEmployeeRoleSummariesDaily,
+  calculateDailyReport,
 } from "@/lib/reportCalculations";
 import { normalizeReport, reportDiff, type ReportResponse } from "./lib/report-parity";
 import type { Shift as ReportShift, TipoutType } from "@/types/reports";
@@ -100,7 +100,7 @@ async function computeOldFromPostgres(): Promise<ReportResponse> {
     }));
 
   if (reportShifts.length === 0) {
-    return { summary: null, employeeSummaries: [], roleConfigs: {} };
+    return { summary: null, employeeSummaries: [], shiftResults: [], roleConfigs: {} };
   }
 
   const roleConfigMap = new Map<
@@ -125,12 +125,13 @@ async function computeOldFromPostgres(): Promise<ReportResponse> {
   const roleConfigs = Object.fromEntries(roleConfigMap);
 
   const summary = calculateOverallSummary(reportShifts);
-  const employeeSummaries = calculateEmployeeRoleSummariesDaily(reportShifts);
+  const { employeeSummaries, shiftResults } = calculateDailyReport(reportShifts);
 
   return {
     summary: summary as unknown as Record<string, number>,
     employeeSummaries: employeeSummaries as unknown as ReportResponse["employeeSummaries"],
     roleConfigs,
+    shiftResults,
   };
 }
 
@@ -141,15 +142,15 @@ async function fetchNew(): Promise<ReportResponse> {
   }) as Promise<ReportResponse>;
 }
 
-async function employeeIdentityMap(): Promise<Map<string, string>> {
+async function identityMap(table: "employees" | "shifts"): Promise<Map<string, string>> {
   const ids = new Map<string, string>();
   const legacyIds = new Set<string>();
   let cursor: string | null = null;
   for (;;) {
     const result: { page: Array<{ _id: string; legacyId?: string }>; isDone: boolean; continueCursor: string } =
-      await convex.query(anyApi.etl.auditPage, { table: "employees", paginationOpts: { numItems: 500, cursor } });
+      await convex.query(anyApi.etl.auditPage, { table, paginationOpts: { numItems: 500, cursor } });
     for (const row of result.page) {
-      if (!row.legacyId || legacyIds.has(row.legacyId)) throw new Error("Missing or duplicate source employee identity");
+      if (!row.legacyId || legacyIds.has(row.legacyId)) throw new Error("Missing or duplicate source identity");
       ids.set(row._id, row.legacyId);
       legacyIds.add(row.legacyId);
     }
@@ -160,7 +161,9 @@ async function employeeIdentityMap(): Promise<Map<string, string>> {
 
 async function main() {
   console.log(`Comparing reports: ${START_DATE} → ${END_DATE}`);
-  const identities = await employeeIdentityMap();
+  const [identities, shiftIds] = await Promise.all([
+    identityMap("employees"), identityMap("shifts"),
+  ]);
   const [oldR, newR] = await Promise.all([computeOldFromPostgres(), fetchNew()]);
   console.log(
     `  old: ${oldR.employeeSummaries.length} summaries, ${Object.keys(oldR.roleConfigs).length} roles`,
@@ -168,7 +171,7 @@ async function main() {
   console.log(
     `  new: ${newR.employeeSummaries.length} summaries, ${Object.keys(newR.roleConfigs).length} roles`,
   );
-  const diffs = reportDiff(normalizeReport(oldR), normalizeReport(newR, identities));
+  const diffs = reportDiff(normalizeReport(oldR), normalizeReport(newR, identities, shiftIds));
   if (diffs.length === 0) {
     console.log("PARITY OK — no diffs.");
     return;

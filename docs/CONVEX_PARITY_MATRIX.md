@@ -4,8 +4,8 @@ This is an evidence checklist, not a claim of production equivalence. The actual
 
 | Area | Implemented / offline evidence | Required live acceptance |
 |---|---|---|
-| Paid/received semantics | Same paid-only Shifts labels and Reports link; shared anonymous fixture proves incoming allocation and payroll totals | Compare the displayed current day/range with the deployed legacy app |
-| Report algorithms | No changes to either calculator; corrected calculation assertions also pass directly against untouched legacy functions | Every real historical payroll period, every employee/role, effective-date boundary and largest date range match |
+| Shift/report numbers | Shifts consumes the same complete-day report calculation: signed received-minus-paid tipouts, original gross credit, pooled cash/credit, payroll tips and tip rates; original shift IDs prevent duplication | Compare every displayed day/range, employee/role filter, pooled role and multiple-shift employee with the deployed legacy app |
+| Report algorithms | Existing daily formulas extracted into one shared per-shift calculation, then aggregated without changing precision or summary formulas; corrected calculation assertions also pass directly against untouched legacy functions | Every real historical payroll period, every employee/role, effective-date boundary and largest date range match |
 | Employee report filter | Allocate across all daily shifts first; filter only presentation | Real multi-role and pooled employee examples including duplicate names |
 | Historical role configs | Empty pool-only configs, closed history and exact timestamps preserved; rate changes close prior records | Actual source history and overlapping-config ordering reconcile |
 | Stale role editors | Atomic role+configs save with original complete version snapshot; stale edits rejected before writes | Two real admin sessions, simultaneous edits/end-current, cancel/retry/new-role flows |
@@ -23,7 +23,7 @@ This is an evidence checklist, not a claim of production equivalence. The actual
 
 ## Why five pre-existing calculator tests changed
 
-The calculators themselves did not change. The old tests contradicted their fixtures or the unchanged legacy implementation:
+The original correction did not change payroll formulas. The later Shifts alignment extracts the existing daily processing into a shared function and keeps the aggregation formulas unchanged. The old tests contradicted their fixtures or the unchanged legacy implementation:
 
 - No host present means no host payout; positive host-presence and cross-day coverage was added
 - Fractional multiplication is asserted with numerical tolerance rather than exact `14` versus `14.000000000000002`
@@ -40,3 +40,19 @@ The corrected calculation suites passed against the unchanged legacy modules as 
 - A network or response-projection failure can be ambiguous after an ordinary mutation commits. The adapters do not automatically retry writes. Check the stored row before retrying an ambiguous POST; a 500 is not proof that nothing was written
 - A successful offline build skips remote compatibility only when explicitly requested locally. It proves compilation, not deployment, authentication, data completeness, or runtime behavior
 - No source/target payroll export has been published, no live backfill has been run, and no final cutover/DNS change is authorized by this checklist
+
+## Per-shift display precision
+
+Shifts is still one row per original work shift, while Reports groups by employee/role across the selected days. The per-shift row uses its original share of the daily pool, never a duplicated employee summary or a newly invented allocation. Every daily contributor participates before the Shifts employee/role filters hide rows.
+
+Existing payroll precision is preserved: Reports aggregates unrounded allocations, then rounds its summary. Shifts formats each row to cents. Three shifts receiving one third of a dollar each display $0.33, while their Reports total is $1.00. The underlying allocations still sum to $1.00; the implementation does not redistribute pennies or change payroll to force rounded row labels to add up. Effective-date checks, configuration precedence and zero-hour behavior remain the existing report behavior.
+
+This release requires backend contract `tipout-shift-report-2026-10-01-v3`, because `reports.get` now returns `shiftResults`. Deploy the matching backend before rebuilding the frontend; the gate must not be bypassed. The compatibility REST adapter maps each shift and employee ID to its legacy identity, and the protected parity harness compares these per-shift results as well as summary totals.
+
+## Existing wage aggregation ambiguity
+
+The source schema permits distinct roles with the same name. Reports groups by employee ID plus role name, then applies the last encountered base rate to all grouped hours. That pre-existing behavior is intentionally unchanged. Shifts does not introduce a per-shift base-pay, all-in hourly wage or wage-inclusive payroll-total column, because those could disagree with the existing grouped report. Inventory duplicate role names/rates and reconcile their real historical Reports results before cutover; any wage-policy correction needs a separately reviewed decision.
+
+## Report payload size
+
+Returned shift rows contain compact identity/label and financial fields, not a copy of complete role-configuration history per shift. A 2,000-shift/50-config synthetic regression stays below 2 MiB. This is a guard against avoidable payload amplification, not a guarantee for arbitrary historical ranges; the largest real report/date range still needs live Convex limit testing.

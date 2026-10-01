@@ -6,7 +6,7 @@ import { reportResponseValidator } from "./lib/validators";
 import type { Doc } from "./_generated/dataModel";
 import {
   calculateOverallSummary,
-  calculateEmployeeRoleSummariesDaily,
+  calculateDailyReport,
 } from "../src/lib/reportCalculations";
 import type { Shift as ReportShift } from "../src/types/reports";
 
@@ -96,7 +96,7 @@ export const get = query({
       });
 
     if (reportShifts.length === 0) {
-      return { summary: null, employeeSummaries: [], roleConfigs: {} };
+      return { summary: null, employeeSummaries: [], shiftResults: [], roleConfigs: {} };
     }
 
     // Mirror /api/reports' roleConfigs map shape: { [roleName]: { barTipout, hostTipout, sa } }
@@ -119,11 +119,12 @@ export const get = query({
     });
 
     const summary = calculateOverallSummary(reportShifts);
-    const employeeSummaries = calculateEmployeeRoleSummariesDaily(reportShifts);
+    const { employeeSummaries, shiftResults } = calculateDailyReport(reportShifts);
 
     return {
       summary,
       employeeSummaries,
+      shiftResults,
       roleConfigs: Object.fromEntries(roleConfigMap),
     };
   },

@@ -6,63 +6,17 @@ import Link from 'next/link'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { useMutation } from 'convex/react'
 import { useAuthenticatedQuery as useQuery } from '@/lib/useAuthenticatedQuery'
-import type { FunctionReturnType } from 'convex/server'
 import { api } from '../../../../convex/_generated/api'
 import type { Id } from '../../../../convex/_generated/dataModel'
 import { resolveEmployeeFilterId } from '@/lib/employeeFilter'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import { AdminOnly } from '@/components/RoleBasedUI'
-import { getShiftReportHref } from '@/lib/shiftReportLink'
-import { calculateTipouts, roleReceivesTipoutType } from '@/lib/tipoutCalculations'
+import type { ShiftReportResult } from '@/lib/reportCalculations'
+import { filterShiftReportResults } from '@/lib/shiftReportRows'
 
-type Shift = FunctionReturnType<typeof api.shifts.list>[number]
-
-// The calculators under src/lib expect configs where `distributionGroup` / `tipPoolGroup`
-// are `string | undefined`; Convex returns `string | null`. Adapt without casts.
-type CalcConfig = {
+type Employee = {
   id: string
-  tipoutType: string
-  percentageRate: number
-  effectiveFrom: string
-  effectiveTo: string | null
-  paysTipout?: boolean
-  receivesTipout?: boolean
-  distributionGroup?: string
-}
-type CalcShift = {
-  id: string
-  date: string
-  hours: number
-  cashTips: number
-  creditTips: number
-  liquorSales: number
-  employee: { id: string; name: string }
-  role: { name: string; basePayRate: number; configs: CalcConfig[] }
-}
-function toCalcShift(shift: Shift): CalcShift {
-  return {
-    id: shift.id,
-    date: shift.date,
-    hours: shift.hours,
-    cashTips: shift.cashTips,
-    creditTips: shift.creditTips,
-    liquorSales: shift.liquorSales,
-    employee: { id: shift.employee.id, name: shift.employee.name },
-    role: {
-      name: shift.role.name,
-      basePayRate: shift.role.basePayRate,
-      configs: shift.role.configs.map((c) => ({
-        id: c.id,
-        tipoutType: c.tipoutType,
-        percentageRate: c.percentageRate,
-        effectiveFrom: c.effectiveFrom,
-        effectiveTo: c.effectiveTo,
-        paysTipout: c.paysTipout,
-        receivesTipout: c.receivesTipout,
-        distributionGroup: c.distributionGroup ?? undefined,
-      })),
-    },
-  }
+  name: string
 }
 
 // Create a new client component for the shifts content
@@ -70,7 +24,6 @@ function ShiftsContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const pathname = usePathname()
-
   const [isDateRange, setIsDateRange] = useState(() => {
     const start = searchParams.get('startDate')
     const end = searchParams.get('endDate')
@@ -84,18 +37,17 @@ function ShiftsContent() {
       role: searchParams.get('role') || '',
     }
   })
-  // Build query args matching the legacy URL-param contract.
-  const queryArgs: {
-    startDate?: string
-    endDate?: string
-    employeeId?: string
-    role?: string
-  } = { startDate: filters.startDate }
-  if (isDateRange) queryArgs.endDate = filters.endDate
-  if (filters.employeeId) queryArgs.employeeId = filters.employeeId
-  if (filters.role) queryArgs.role = filters.role
 
-  const shifts = useQuery(api.shifts.list, queryArgs)
+  // Fetch the complete report before applying employee/role display filters.
+  // Both screens therefore use the exact same daily allocation and payroll math.
+  const reportData = useQuery(api.reports.get, {
+    startDate: filters.startDate,
+    endDate: isDateRange ? filters.endDate : filters.startDate,
+  })
+  const employeesData = useQuery(api.employees.list)
+  const shifts: ShiftReportResult[] = reportData?.shiftResults ?? []
+  const selectedEmployeeId = resolveEmployeeFilterId(employeesData, filters.employeeId)
+  const isLoading = reportData === undefined || employeesData === undefined
   const removeShift = useMutation(api.shifts.remove)
 
   // Update filters when search params change
@@ -121,38 +73,25 @@ function ShiftsContent() {
     router.push(newUrl)
   }, [filters, pathname, router, isDateRange])
 
-  const handleDelete = async (shiftId: Id<'shifts'>) => {
+  const handleDelete = async (shiftId: string) => {
     if (!confirm('Are you sure you want to delete this shift?')) {
       return
     }
 
     try {
-      await removeShift({ id: shiftId })
+      // IDs in reports.get are native shift IDs; no label/name lookup is used.
+      await removeShift({ id: shiftId as Id<'shifts'> })
     } catch (err) {
       console.error('Error deleting shift:', err)
       alert('Failed to delete shift')
     }
   }
 
-  if (shifts === undefined) {
+  const displayedShifts = filterShiftReportResults(shifts, { ...filters, employeeId: selectedEmployeeId })
+
+  if (isLoading) {
     return <LoadingSpinner />
   }
-
-  const selectedEmployeeId = resolveEmployeeFilterId(shifts.map(shift => shift.employee), filters.employeeId)
-
-  // Group shifts by date to determine if hosts/SAs worked each day
-  const shiftsByDate = shifts.reduce((acc, shift) => {
-    // Parse the date and adjust for timezone
-    const date = new Date(shift.date)
-    // Add timezone offset to get to local time
-    date.setMinutes(date.getMinutes() + date.getTimezoneOffset())
-    const dateStr = format(date, 'yyyy-MM-dd')
-    if (!acc[dateStr]) {
-      acc[dateStr] = []
-    }
-    acc[dateStr].push(shift)
-    return acc
-  }, {} as Record<string, Shift[]>)
 
   return (
     <div className="px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
@@ -160,17 +99,8 @@ function ShiftsContent() {
         <div className="sm:flex-auto">
           <h1 className="text-2xl font-semibold text-[var(--foreground)]">shifts</h1>
           <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
-            view and manage employee shifts and tipouts paid.
+            view and manage employee shifts and tipouts.
           </p>
-          <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
-            This table shows tipouts paid from each shift, not tipouts received. A $0.00 here does not mean the employee received no tipout. Reports includes received tipouts and final payroll totals.
-          </p>
-          <Link
-            href={getShiftReportHref(filters, isDateRange)}
-            className="mt-2 inline-block text-sm font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300"
-          >
-            View received tipouts and payroll totals in Reports
-          </Link>
         </div>
         <div className="mt-4 sm:ml-16 sm:mt-0 sm:flex-none">
           <Link
@@ -253,9 +183,9 @@ function ShiftsContent() {
                       <option value="">all employees</option>
                       {Object.values(
                         shifts.reduce((acc, shift) => {
-                          acc[shift.employee.id] = shift.employee
-                          return acc
-                        }, {} as Record<string, Shift['employee']>)
+                          acc[shift.employee.id] = shift.employee;
+                          return acc;
+                        }, {} as Record<string, Employee>)
                       ).map((employee) => (
                         <option key={employee.id} value={employee.id}>
                           {employee.name}
@@ -279,8 +209,8 @@ function ShiftsContent() {
                       <option value="">all roles</option>
                       {Object.values(
                         shifts.reduce((acc, shift) => {
-                          acc[shift.role.name] = shift.role.name
-                          return acc
+                          acc[shift.role.name] = shift.role.name;
+                          return acc;
                         }, {} as Record<string, string>)
                       ).map((roleName) => (
                         <option key={roleName} value={roleName}>
@@ -296,7 +226,7 @@ function ShiftsContent() {
         </div>
       </div>
 
-      {shifts.length === 0 ? (
+      {displayedShifts.length === 0 ? (
         <div className="mt-8 bg-white/50 dark:bg-gray-800/50 shadow sm:rounded-lg border border-gray-200 dark:border-gray-700 p-8">
           <div className="text-center">
             <svg
@@ -353,19 +283,28 @@ function ShiftsContent() {
                     cash tips
                   </th>
                   <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
+                    gross credit tips
+                  </th>
+                  <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
                     credit tips
                   </th>
                   <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
                     liquor sales
                   </th>
                   <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                    bar tipout paid
+                    bar tipout
                   </th>
                   <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                    host tipout paid
+                    host tipout
                   </th>
                   <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                    sa tipout paid
+                    sa tipout
+                  </th>
+                  <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white" title="Credit tips after pooling, received tipouts, and paid tipouts.">
+                    payroll tips
+                  </th>
+                  <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
+                    total tips/hour
                   </th>
                   <AdminOnly>
                     <th scope="col" className="relative py-3.5 pl-3 pr-4 sm:pr-6">
@@ -375,20 +314,12 @@ function ShiftsContent() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                {shifts.map((shift) => {
+                {displayedShifts.map((shift) => {
                   // Parse the date and adjust for timezone
                   const date = new Date(shift.date)
                   // Add timezone offset to get to local time
                   date.setMinutes(date.getMinutes() + date.getTimezoneOffset())
-                  const dateStr = format(date, 'yyyy-MM-dd')
-                  const dayShifts = shiftsByDate[dateStr]
-
-                  // Check for role types based on role configurations rather than name matching
-                  const hasHost = dayShifts.some((s) => roleReceivesTipoutType(toCalcShift(s), 'host'))
-                  const hasSA = dayShifts.some((s) => roleReceivesTipoutType(toCalcShift(s), 'sa'))
-                  const hasBar = dayShifts.some((s) => roleReceivesTipoutType(toCalcShift(s), 'bar'))
-
-                  const { barTipout, hostTipout, saTipout } = calculateTipouts(toCalcShift(shift), hasHost, hasSA, hasBar)
+                  const { barTipout, hostTipout, saTipout } = shift
 
                   return (
                     <tr key={shift.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
@@ -408,19 +339,28 @@ function ShiftsContent() {
                         ${shift.cashTips.toFixed(2)}
                       </td>
                       <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
+                        ${shift.originalCreditTips.toFixed(2)}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
                         ${shift.creditTips.toFixed(2)}
                       </td>
                       <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
                         ${shift.liquorSales.toFixed(2)}
                       </td>
-                      <td className={`whitespace-nowrap px-3 py-4 text-sm ${barTipout !== 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-500 dark:text-gray-400'}`}>
+                      <td className={`whitespace-nowrap px-3 py-4 text-sm ${barTipout < 0 ? 'text-red-600 dark:text-red-400' : barTipout > 0 ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'}`}>
                         ${barTipout.toFixed(2)}
                       </td>
-                      <td className={`whitespace-nowrap px-3 py-4 text-sm ${hostTipout !== 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-500 dark:text-gray-400'}`}>
+                      <td className={`whitespace-nowrap px-3 py-4 text-sm ${hostTipout < 0 ? 'text-red-600 dark:text-red-400' : hostTipout > 0 ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'}`}>
                         ${hostTipout.toFixed(2)}
                       </td>
-                      <td className={`whitespace-nowrap px-3 py-4 text-sm ${saTipout !== 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-500 dark:text-gray-400'}`}>
+                      <td className={`whitespace-nowrap px-3 py-4 text-sm ${saTipout < 0 ? 'text-red-600 dark:text-red-400' : saTipout > 0 ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'}`}>
                         ${saTipout.toFixed(2)}
+                      </td>
+                      <td className={`whitespace-nowrap px-3 py-4 text-sm ${shift.payrollTips < 0 ? 'text-red-600 dark:text-red-400' : shift.payrollTips > 0 ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'}`}>
+                        ${shift.payrollTips.toFixed(2)}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
+                        ${shift.totalTipsPerHour.toFixed(2)}
                       </td>
                       <AdminOnly>
                         <td className="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">

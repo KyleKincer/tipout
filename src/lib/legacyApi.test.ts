@@ -40,7 +40,7 @@ beforeEach(() => {
     'roleConfigs:endCurrent': { success: true }, 'employees:remove': { success: true }, 'roles:remove': { success: true }, 'shifts:remove': { success: true },
     'shifts:list': [shift], 'shifts:get': shift, 'shifts:create': shift, 'shifts:update': shift,
     'legacyApi:configsForRoles': [{ roleId: role.id, configs: [config] }],
-    'reports:get': { summary: { totalHours: 8 }, employeeSummaries: [{ employeeId: employee.id, employeeName: employee.name }], roleConfigs: { Server: { barTipout: 2.5, hostTipout: 0, sa: 0 } } },
+    'reports:get': { summary: { totalHours: 8 }, employeeSummaries: [{ employeeId: employee.id, employeeName: employee.name }], shiftResults: [{ id: shift.id, date: DATE, employee: { id: employee.id, name: employee.name }, role: { name: role.name }, payrollTips: 30 }], roleConfigs: { Server: { barTipout: 2.5, hostTipout: 0, sa: 0 } } },
     'tipPoolGroups:list': ['servers'],
   };
   query = jest.fn(async (ref, args) => {
@@ -157,6 +157,9 @@ test('current configuration POST forwards all legacy flags and returns raw Decim
 test('report preserves totals, ignores employee input for pooling, and maps employee summary IDs', async () => {
   const result = await request('reports', 'GET', undefined, '?startDate=2026-10-01&endDate=2026-10-01&employeeId=cuidEmployee');
   expect(result.status).toBe(200); expect(result.value.employeeSummaries[0].employeeId).toBe('cuidEmployee');
+  expect(result.value.shiftResults[0]).toMatchObject({
+    id: 'cuidShift', employee: { id: 'cuidEmployee' }, role: { name: 'Server' }, payrollTips: 30,
+  });
   expect(callArgs(query, 'reports:get')).toEqual([{ startDate: '2026-10-01', endDate: '2026-10-01' }]);
 });
 

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { calculateOverallSummary, calculateEmployeeRoleSummariesDaily } from '@/utils/reportCalculations';
-import { Shift as ReportShift } from '@/types/reports';
+import { calculateOverallSummary, calculateDailyReport } from '@/utils/reportCalculations';
+import { Shift as ReportShift, TipoutType } from '@/types/reports';
 import { prisma as db } from '@/lib/prisma';
 import { Shift as PrismaShift, Employee as PrismaEmployee, Role as PrismaRole, RoleConfig as PrismaRoleConfig } from '@prisma/client';
 
@@ -81,7 +81,7 @@ async function fetchShiftsFromDB(startDate: string, endDate: string): Promise<Re
             // Map configs, ensuring the target type ReportShift['role']['configs'] is compatible
             configs: (shift.role.configs || []).map((config) => ({
                 id: config.id,
-                tipoutType: config.tipoutType, // Assuming ReportShift uses string here
+                tipoutType: config.tipoutType as TipoutType, // Stored as text by Prisma; supported report types remain bar/host/sa
                 percentageRate: Number(config.percentageRate),
                 effectiveFrom: config.effectiveFrom.toISOString(),
                 effectiveTo: config.effectiveTo ? config.effectiveTo.toISOString() : null,
@@ -111,7 +111,7 @@ export async function GET(request: NextRequest) {
         const allShiftsData = await fetchShiftsFromDB(startDate, endDate);
 
         if (!allShiftsData || allShiftsData.length === 0) {
-            return NextResponse.json({ summary: null, employeeSummaries: [], roleConfigs: {} });
+            return NextResponse.json({ summary: null, employeeSummaries: [], shiftResults: [], roleConfigs: {} });
         }
 
         // Get unique roles and their current configs
@@ -135,12 +135,13 @@ export async function GET(request: NextRequest) {
         // Calculate summaries using the utility function
         // Pass the fetched shifts directly
         const summary = calculateOverallSummary(allShiftsData);
-        const employeeSummaries = calculateEmployeeRoleSummariesDaily(allShiftsData);
+        const { employeeSummaries, shiftResults } = calculateDailyReport(allShiftsData);
 
         // Return the processed data including role configs
         return NextResponse.json({ 
             summary, 
             employeeSummaries,
+            shiftResults,
             roleConfigs: roleConfigsForResponse // Use the prepared object
         });
 

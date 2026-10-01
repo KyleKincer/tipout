@@ -92,7 +92,7 @@ export type EmployeeRoleSummary = {
 /**
  * Valid tipout types in the system
  */
-export type TipoutType = 'bar' | 'host' | 'sa';
+export type TipoutType = '' | 'bar' | 'host' | 'sa';
 
 /**
  * Daily role presence tracking

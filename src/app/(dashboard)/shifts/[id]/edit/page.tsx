@@ -2,11 +2,13 @@
 
 import { useEffect, useState, useRef, use } from 'react'
 import { useRouter } from 'next/navigation'
-import { useMutation, useQuery } from 'convex/react'
+import { useMutation } from 'convex/react'
+import { useAuthenticatedQuery as useQuery } from '@/lib/useAuthenticatedQuery'
 import type { FunctionReturnType } from 'convex/server'
 import { format } from 'date-fns'
 import ShiftEntryForm from '@/components/ShiftEntryForm'
 import LoadingSpinner from '@/components/LoadingSpinner'
+import { getShiftEditorState } from '@/lib/shiftFormState'
 import { calculateTipouts, roleReceivesTipoutType } from '@/lib/tipoutCalculations'
 import { api } from '../../../../../../convex/_generated/api'
 import type { Id } from '../../../../../../convex/_generated/dataModel'
@@ -74,7 +76,7 @@ function toCalcShift(shift: ShiftDoc): CalcShift {
 export default function EditShiftPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params)
   const router = useRouter()
-  const shiftId = resolvedParams.id as Id<'shifts'>
+  const shiftId = resolvedParams.id
 
   const shiftData = useQuery(api.shifts.get, { id: shiftId })
 
@@ -107,9 +109,10 @@ export default function EditShiftPage({ params }: { params: Promise<{ id: string
   }, [isTipoutsExpanded])
 
   const handleSubmit = async (data: ShiftFormData) => {
+    if (!shiftData) return
     try {
       await updateShift({
-        id: shiftId,
+        id: shiftData.id,
         employeeId: data.employeeId as Id<'employees'>,
         roleId: data.roleId as Id<'roles'>,
         date: data.date,
@@ -126,36 +129,31 @@ export default function EditShiftPage({ params }: { params: Promise<{ id: string
     }
   }
 
-  if (shiftData === undefined || dayShifts === undefined) {
-    return <LoadingSpinner />
-  }
-
-  if (error) {
-    return <div className="text-red-600">{error}</div>
-  }
-
-  if (shiftData === null) {
-    return <div>Shift not found</div>
-  }
+  const editorState = getShiftEditorState(shiftData, dayShifts)
+  if (editorState.status === 'not-found') return <div>Shift not found</div>
+  if (editorState.status === 'loading') return <LoadingSpinner />
+  if (error) return <div className="text-red-600">{error}</div>
+  const currentShift = editorState.shift
+  const currentDayShifts = editorState.dayShifts
 
   // Build form initial data (date formatted for <input type="date" />)
-  const shiftDate = new Date(shiftData.date)
+  const shiftDate = new Date(currentShift.date)
   shiftDate.setMinutes(shiftDate.getMinutes() + shiftDate.getTimezoneOffset())
   const initialFormData: ShiftFormData = {
-    employeeId: shiftData.employee.id,
-    roleId: shiftData.role.id,
+    employeeId: currentShift.employee.id,
+    roleId: currentShift.role.id,
     date: format(shiftDate, 'yyyy-MM-dd'),
-    hours: shiftData.hours,
-    cashTips: shiftData.cashTips,
-    creditTips: shiftData.creditTips,
-    liquorSales: shiftData.liquorSales,
+    hours: currentShift.hours,
+    cashTips: currentShift.cashTips,
+    creditTips: currentShift.creditTips,
+    liquorSales: currentShift.liquorSales,
   }
 
-  const calcShift = toCalcShift(shiftData)
+  const calcShift = toCalcShift(currentShift)
 
   // Determine if hosts/SAs worked that day using role configurations
-  const hasHost = dayShifts.some((s) => roleReceivesTipoutType(toCalcShift(s), 'host'))
-  const hasSA = dayShifts.some((s) => roleReceivesTipoutType(toCalcShift(s), 'sa'))
+  const hasHost = currentDayShifts.some((s) => roleReceivesTipoutType(toCalcShift(s), 'host'))
+  const hasSA = currentDayShifts.some((s) => roleReceivesTipoutType(toCalcShift(s), 'sa'))
   const hasBar = roleReceivesTipoutType(calcShift, 'bar')
 
   const { barTipout, hostTipout, saTipout } = calculateTipouts(calcShift, hasHost, hasSA, hasBar)

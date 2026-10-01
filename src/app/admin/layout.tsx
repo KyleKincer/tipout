@@ -1,6 +1,5 @@
-import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
-import { UserRole } from "@/lib/roles";
+import { isAdmin } from "@/lib/auth";
 import Link from "next/link";
 
 // Admin navigation component with link back to main app
@@ -31,10 +30,7 @@ export default async function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const session = await auth();
-  const roles = (session.sessionClaims?.metadata as any)?.roles as string[] | undefined;
-
-  if (!roles?.includes(UserRole.ADMIN)) {
+  if (!(await isAdmin())) {
     redirect("/");
   }
 
@@ -46,4 +42,4 @@ export default async function AdminLayout({
       </div>
     </div>
   );
-} 
+}

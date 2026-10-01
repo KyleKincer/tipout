@@ -34,3 +34,16 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Convex migration
+
+Read the [current cutover runbook](docs/CONVEX_CUTOVER_RUNBOOK.md) before deploying the successor or moving data. The original migration plan is historical design, not proof that dual writes or rollback exist.
+
+- `npm run migrate:convex -- --help`: protected snapshot export, dry-run reconciliation, and explicitly gated insert-only apply
+- `npm run parity:reports`: read-only report parity audit; requires an isolated/read-only source or a coordinated freeze and verified source/target identities
+- `npm run test:backfill`: offline migration safety tests
+- `npm run typecheck`: standalone type checking (release builds also enforce type and lint checks)
+
+Never commit source/target exports, migration reports, checkpoints, backup files, or credentials. The runner requires private artifacts outside the checkout. A successful frontend build is not evidence of a matching Convex backend deployment or a completed data migration.
+
+`npm run verify` runs full source lint, type checking and tests. `npm run build` first verifies the target backend contract. For local compilation only, `TIPOUT_OFFLINE_BUILD=1 npm run build` explicitly skips that remote check; hosted builds cannot use this bypass.

@@ -1,3 +1,5 @@
+> Historical design only. For current verified behavior, blockers, safe backfill and same-URL switch/rollback steps, use [the cutover runbook](docs/CONVEX_CUTOVER_RUNBOOK.md). The feature flag and shadow-write phases described below are not implemented.
+
 # Tipout: Supabase/Postgres → Convex Migration Plan
 
 ## Executive summary

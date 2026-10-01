@@ -4,12 +4,15 @@ import { useEffect, useState, Suspense } from 'react'
 import { format } from 'date-fns'
 import Link from 'next/link'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
-import { useMutation, useQuery } from 'convex/react'
+import { useMutation } from 'convex/react'
+import { useAuthenticatedQuery as useQuery } from '@/lib/useAuthenticatedQuery'
 import type { FunctionReturnType } from 'convex/server'
 import { api } from '../../../../convex/_generated/api'
 import type { Id } from '../../../../convex/_generated/dataModel'
+import { resolveEmployeeFilterId } from '@/lib/employeeFilter'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import { AdminOnly } from '@/components/RoleBasedUI'
+import { getShiftReportHref } from '@/lib/shiftReportLink'
 import { calculateTipouts, roleReceivesTipoutType } from '@/lib/tipoutCalculations'
 
 type Shift = FunctionReturnType<typeof api.shifts.list>[number]
@@ -68,7 +71,11 @@ function ShiftsContent() {
   const router = useRouter()
   const pathname = usePathname()
 
-  const [isDateRange, setIsDateRange] = useState(false)
+  const [isDateRange, setIsDateRange] = useState(() => {
+    const start = searchParams.get('startDate')
+    const end = searchParams.get('endDate')
+    return !!(start && end && start !== end)
+  })
   const [filters, setFilters] = useState(() => {
     return {
       startDate: searchParams.get('startDate') || format(new Date(), 'yyyy-MM-dd'),
@@ -81,11 +88,11 @@ function ShiftsContent() {
   const queryArgs: {
     startDate?: string
     endDate?: string
-    employeeId?: Id<'employees'>
+    employeeId?: string
     role?: string
   } = { startDate: filters.startDate }
   if (isDateRange) queryArgs.endDate = filters.endDate
-  if (filters.employeeId) queryArgs.employeeId = filters.employeeId as Id<'employees'>
+  if (filters.employeeId) queryArgs.employeeId = filters.employeeId
   if (filters.role) queryArgs.role = filters.role
 
   const shifts = useQuery(api.shifts.list, queryArgs)
@@ -131,6 +138,8 @@ function ShiftsContent() {
     return <LoadingSpinner />
   }
 
+  const selectedEmployeeId = resolveEmployeeFilterId(shifts.map(shift => shift.employee), filters.employeeId)
+
   // Group shifts by date to determine if hosts/SAs worked each day
   const shiftsByDate = shifts.reduce((acc, shift) => {
     // Parse the date and adjust for timezone
@@ -151,8 +160,17 @@ function ShiftsContent() {
         <div className="sm:flex-auto">
           <h1 className="text-2xl font-semibold text-[var(--foreground)]">shifts</h1>
           <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
-            view and manage employee shifts and tipouts.
+            view and manage employee shifts and tipouts paid.
           </p>
+          <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
+            This table shows tipouts paid from each shift, not tipouts received. A $0.00 here does not mean the employee received no tipout. Reports includes received tipouts and final payroll totals.
+          </p>
+          <Link
+            href={getShiftReportHref(filters, isDateRange)}
+            className="mt-2 inline-block text-sm font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300"
+          >
+            View received tipouts and payroll totals in Reports
+          </Link>
         </div>
         <div className="mt-4 sm:ml-16 sm:mt-0 sm:flex-none">
           <Link
@@ -228,7 +246,7 @@ function ShiftsContent() {
                   <div className="mt-2">
                     <select
                       id="employeeId"
-                      value={filters.employeeId}
+                      value={selectedEmployeeId}
                       onChange={(e) => setFilters({ ...filters, employeeId: e.target.value })}
                       className="block w-full rounded-md border-gray-300 shadow-sm px-3 py-2 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed"
                     >
@@ -341,13 +359,13 @@ function ShiftsContent() {
                     liquor sales
                   </th>
                   <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                    bar tipout
+                    bar tipout paid
                   </th>
                   <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                    host tipout
+                    host tipout paid
                   </th>
                   <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                    sa tipout
+                    sa tipout paid
                   </th>
                   <AdminOnly>
                     <th scope="col" className="relative py-3.5 pl-3 pr-4 sm:pr-6">

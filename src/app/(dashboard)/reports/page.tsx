@@ -4,9 +4,9 @@ import { useState, useEffect, Suspense } from 'react'
 import { format } from 'date-fns'
 import Link from 'next/link'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
-import { useQuery } from 'convex/react'
+import { useAuthenticatedQuery as useQuery } from '@/lib/useAuthenticatedQuery'
 import { api } from '../../../../convex/_generated/api'
-import type { Id } from '../../../../convex/_generated/dataModel'
+import { resolveEmployeeFilterId } from '@/lib/employeeFilter'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import {
   Chart as ChartJS,
@@ -74,11 +74,11 @@ function ReportsContent() {
 
   const employeesData = useQuery(api.employees.list)
   const employees: Employee[] = (employeesData ?? []).map((e) => ({ id: e.id, name: e.name }))
+  const selectedEmployeeId = resolveEmployeeFilterId(employeesData, filters.employeeId)
 
   const reportData = useQuery(api.reports.get, {
     startDate: filters.startDate,
     endDate: isDateRange ? filters.endDate : filters.startDate,
-    employeeId: filters.employeeId ? (filters.employeeId as Id<'employees'>) : undefined,
   })
 
   const isLoading = reportData === undefined
@@ -775,7 +775,7 @@ function ReportsContent() {
 
   // Filter the fetched summaries for display if an employee filter is active
   let displayedEmployeeSummaries = filters.employeeId
-    ? allEmployeeRoleSummaries.filter(s => s.employeeId === filters.employeeId)
+    ? allEmployeeRoleSummaries.filter(s => s.employeeId === selectedEmployeeId)
     : allEmployeeRoleSummaries;
 
   // Grouping logic remains the same, operates on fetched summaries
@@ -875,7 +875,7 @@ function ReportsContent() {
               <div className="mt-1">
                 <select
                   id="employeeId"
-                  value={filters.employeeId}
+                  value={selectedEmployeeId}
                   onChange={(e) => setFilters({ ...filters, employeeId: e.target.value })}
                   disabled={isFilterLoading}
                   className="block w-full rounded-md border-gray-300 shadow-sm px-3 py-2 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed"

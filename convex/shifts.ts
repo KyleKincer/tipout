@@ -1,7 +1,8 @@
 import { v, ConvexError } from "convex/values";
 import { mutation, query, type QueryCtx, type MutationCtx } from "./_generated/server";
 import { parseDateInput, parseEndOfDay, serializeShift } from "./lib/serialize";
-import { requireAdmin } from "./lib/acl";
+import { requireAdmin, requireAuthenticated } from "./lib/acl";
+import { resolveLegacyDoc } from "./lib/legacyIds";
 import { shiftValidator } from "./lib/validators";
 import type { Doc } from "./_generated/dataModel";
 
@@ -30,11 +31,15 @@ export const list = query({
   args: {
     startDate: v.optional(v.string()),
     endDate: v.optional(v.string()),
-    employeeId: v.optional(v.id("employees")),
+    employeeId: v.optional(v.string()),
     role: v.optional(v.string()),
   },
   returns: v.array(shiftValidator),
-  handler: async (ctx, { startDate, endDate, employeeId, role }) => {
+  handler: async (ctx, { startDate, endDate, employeeId: requestedEmployeeId, role }) => {
+    await requireAuthenticated(ctx);
+    const employee = requestedEmployeeId ? await resolveLegacyDoc(ctx, "employees", requestedEmployeeId) : null;
+    if (requestedEmployeeId && !employee) return [];
+    const employeeId = employee?._id;
     let shifts: Doc<"shifts">[];
     if (startDate && endDate) {
       const start = parseDateInput(startDate);
@@ -80,10 +85,11 @@ export const list = query({
 });
 
 export const get = query({
-  args: { id: v.id("shifts") },
+  args: { id: v.string() },
   returns: v.union(shiftValidator, v.null()),
   handler: async (ctx, { id }) => {
-    const shift = await ctx.db.get(id);
+    await requireAuthenticated(ctx);
+    const shift = await resolveLegacyDoc(ctx, "shifts", id);
     if (!shift) return null;
     return hydrateShift(ctx, shift);
   },
@@ -104,7 +110,7 @@ export const create = mutation({
     ctx,
     { employeeId, roleId, date, hours, cashTips, creditTips, liquorSales },
   ) => {
-    await requireAdmin(ctx);
+    await requireAuthenticated(ctx);
     const employee = await ctx.db.get(employeeId);
     if (!employee) throw new ConvexError("Employee not found");
     const role = await ctx.db.get(roleId);
@@ -142,6 +148,8 @@ export const update = mutation({
     await requireAdmin(ctx);
     const existing = await ctx.db.get(args.id);
     if (!existing) throw new ConvexError("Shift not found");
+    if (!(await ctx.db.get(args.employeeId))) throw new ConvexError("Employee not found");
+    if (!(await ctx.db.get(args.roleId))) throw new ConvexError("Role not found");
     await ctx.db.patch(args.id, {
       employeeId: args.employeeId,
       roleId: args.roleId,

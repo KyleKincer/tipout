@@ -11,7 +11,7 @@ export const roleBareValidator = v.object({
 export const roleConfigValidator = v.object({
   id: v.id("roleConfigs"),
   roleId: v.id("roles"),
-  tipoutType: v.union(v.literal("bar"), v.literal("host"), v.literal("sa")),
+  tipoutType: v.union(v.literal(""), v.literal("bar"), v.literal("host"), v.literal("sa")),
   percentageRate: v.number(),
   effectiveFrom: v.string(),
   effectiveTo: v.union(v.string(), v.null()),
@@ -34,6 +34,7 @@ export const roleWithConfigsValidator = v.object({
 
 export const employeeValidator = v.object({
   id: v.id("employees"),
+  legacyId: v.optional(v.string()),
   name: v.string(),
   active: v.boolean(),
   defaultRoleId: v.union(v.id("roles"), v.null()),
@@ -106,6 +107,7 @@ export const shiftValidator = v.object({
   updatedAt: v.string(),
   employee: v.object({
     id: v.id("employees"),
+    legacyId: v.optional(v.string()),
     name: v.string(),
     active: v.boolean(),
     defaultRoleId: v.union(v.id("roles"), v.null()),

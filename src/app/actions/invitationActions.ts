@@ -1,15 +1,9 @@
 "use server";
 
-import { auth, clerkClient } from "@clerk/nextjs/server";
+import { clerkClient } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
 import { UserRole } from "@/lib/roles";
-
-// Helper function to check if the current user is an admin
-async function isAdmin(): Promise<boolean> {
-  const session = await auth();
-  const roles = (session.sessionClaims?.metadata as any)?.roles as string[] | undefined;
-  return roles?.includes(UserRole.ADMIN) ?? false;
-}
+import { isAdmin } from "@/lib/auth";
 
 /**
  * Gets a list of invitations from Clerk
@@ -90,4 +84,4 @@ export async function revokeInvitation(formData: FormData): Promise<void> {
     console.error("Error revoking invitation:", error);
     throw new Error("Failed to revoke invitation");
   }
-} 
+}

@@ -1,3 +1,4 @@
+import { requireAuthenticated } from "./lib/acl";
 import { v } from "convex/values";
 import { query } from "./_generated/server";
 import { parseDateInput, parseEndOfDay } from "./lib/serialize";
@@ -16,15 +17,18 @@ export const get = query({
     employeeId: v.optional(v.id("employees")),
   },
   returns: reportResponseValidator,
-  handler: async (ctx, { startDate, endDate, employeeId }) => {
+  handler: async (ctx, { startDate, endDate }) => {
+    await requireAuthenticated(ctx);
     const start = parseDateInput(startDate);
     const end = parseEndOfDay(endDate);
 
-    let shifts = (await ctx.db
+    const shifts = (await ctx.db
       .query("shifts")
       .withIndex("by_date", (q) => q.gte("date", start).lte("date", end))
       .collect()) as Doc<"shifts">[];
-    if (employeeId) shifts = shifts.filter((s) => s.employeeId === employeeId);
+    // All employees must participate in daily pooling before the UI applies its
+    // employee display filter. Filtering inputs here loses received tipouts.
+    // Keep employeeId accepted for existing clients; it must not change payroll.
     shifts.sort((a, b) => a.date - b.date);
 
     // Pre-load referenced employees and roles (and their configs) in a minimum
@@ -79,7 +83,7 @@ export const get = query({
               tipoutType: c.tipoutType,
               percentageRate: c.percentageRate,
               effectiveFrom: new Date(c.effectiveFrom).toISOString(),
-              effectiveTo: c.effectiveTo
+              effectiveTo: c.effectiveTo != null
                 ? new Date(c.effectiveTo).toISOString()
                 : null,
               receivesTipout: c.receivesTipout,

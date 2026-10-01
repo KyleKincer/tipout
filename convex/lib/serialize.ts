@@ -6,6 +6,7 @@ export function serializeEmployee(
 ) {
   return {
     id: doc._id,
+    legacyId: doc.legacyId,
     name: doc.name,
     active: doc.active,
     defaultRoleId: doc.defaultRoleId ?? null,
@@ -32,7 +33,7 @@ export function serializeRoleConfig(doc: Doc<"roleConfigs">) {
     tipoutType: doc.tipoutType,
     percentageRate: doc.percentageRate,
     effectiveFrom: new Date(doc.effectiveFrom).toISOString(),
-    effectiveTo: doc.effectiveTo ? new Date(doc.effectiveTo).toISOString() : null,
+    effectiveTo: doc.effectiveTo != null ? new Date(doc.effectiveTo).toISOString() : null,
     receivesTipout: doc.receivesTipout,
     paysTipout: doc.paysTipout,
     distributionGroup: doc.distributionGroup ?? null,
@@ -71,6 +72,7 @@ export function serializeShift(
     updatedAt: new Date(doc.updatedAt).toISOString(),
     employee: {
       id: employee._id,
+      legacyId: employee.legacyId,
       name: employee.name,
       active: employee.active,
       defaultRoleId: employee.defaultRoleId ?? null,

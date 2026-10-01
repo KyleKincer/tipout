@@ -10,12 +10,16 @@
  * sides means any diff is a data-migration bug, which is exactly what we want
  * to catch before cutover.
  *
+ * Run only with the source restored/read-only or both sources frozen for the
+ * same snapshot. This audit does not validate real Clerk sessions or replace
+ * full row reconciliation and owner-reviewed source/target identities.
+ *
  * Usage:
  *   DATABASE_URL="<postgres-url>" \
  *   CONVEX_URL="https://<deployment>.convex.cloud" \
  *   CONVEX_DEPLOY_KEY="<deploy-key>" \
  *   START_DATE="2025-01-01" END_DATE="2025-12-31" \
- *   npx tsx scripts/parity-reports.ts
+ *   npm run parity:reports
  */
 import { PrismaClient } from "@prisma/client";
 import { ConvexHttpClient } from "convex/browser";
@@ -24,11 +28,12 @@ import {
   calculateOverallSummary,
   calculateEmployeeRoleSummariesDaily,
 } from "@/lib/reportCalculations";
+import { normalizeReport, reportDiff, type ReportResponse } from "./lib/report-parity";
 import type { Shift as ReportShift, TipoutType } from "@/types/reports";
 
 function narrowTipoutType(t: string): TipoutType {
-  if (t === "bar" || t === "host" || t === "sa") return t;
-  throw new Error(`Unknown tipoutType: ${t}`);
+  if (t === "" || t === "bar" || t === "host" || t === "sa") return t;
+  throw new Error("Unsupported source tipout type; inspect restricted snapshot");
 }
 
 const DATABASE_URL = process.env.DATABASE_URL;
@@ -44,29 +49,28 @@ if (!START_DATE) throw new Error("START_DATE is required (YYYY-MM-DD)");
 if (!END_DATE) throw new Error("END_DATE is required (YYYY-MM-DD)");
 
 const prisma = new PrismaClient({ datasources: { db: { url: DATABASE_URL } } });
-const convex = new ConvexHttpClient(CONVEX_URL);
-(convex as unknown as { setAdminAuth: (k: string) => void }).setAdminAuth(
+const convex = new ConvexHttpClient(CONVEX_URL, { logger: false });
+// Read-only audit identity: this checks data parity, NOT real Clerk login/role parity.
+(convex as unknown as { setAdminAuth: (k: string, identity: { subject: string; issuer: string }) => void }).setAdminAuth(
   CONVEX_DEPLOY_KEY,
+  { subject: "migration-parity-audit", issuer: "https://migration-audit.invalid" },
 );
-
-type ReportResponse = {
-  summary: Record<string, number> | null;
-  employeeSummaries: Array<Record<string, string | number | null | undefined>>;
-  roleConfigs: Record<string, { barTipout: number; hostTipout: number; sa: number }>;
-};
 
 async function computeOldFromPostgres(): Promise<ReportResponse> {
   const startDateTime = new Date(START_DATE! + "T00:00:00.000Z");
   const endDateTime = new Date(END_DATE! + "T23:59:59.999Z");
 
-  const shifts = await prisma.shift.findMany({
+  const shifts = await prisma.$transaction(async (tx) => {
+    await tx.$executeRawUnsafe("SET TRANSACTION READ ONLY");
+    return tx.shift.findMany({
     where: { date: { gte: startDateTime, lte: endDateTime } },
     include: {
       employee: { select: { id: true, name: true } },
       role: { include: { configs: true } },
     },
     orderBy: { date: "asc" },
-  });
+    });
+  }, { isolationLevel: "RepeatableRead", maxWait: 10_000, timeout: 300_000 });
 
   const reportShifts: ReportShift[] = shifts
     .filter((s) => !!s.employee && !!s.role)
@@ -79,7 +83,6 @@ async function computeOldFromPostgres(): Promise<ReportResponse> {
       liquorSales: Number(s.liquorSales),
       employee: { id: s.employee!.id, name: s.employee!.name },
       role: {
-        id: s.role!.id,
         name: s.role!.name,
         basePayRate: Number(s.role!.basePayRate),
         configs: (s.role!.configs || []).map((c) => ({
@@ -138,73 +141,26 @@ async function fetchNew(): Promise<ReportResponse> {
   }) as Promise<ReportResponse>;
 }
 
-// Normalize IDs out of comparison — Prisma CUIDs vs Convex Ids don't line up.
-// Key employee summaries by (employeeName, roleName) and drop id fields.
-function normalize(r: ReportResponse): ReportResponse {
-  const sorted = [...r.employeeSummaries].sort((a, b) => {
-    const an = `${a.employeeName ?? ""}|${a.roleName ?? ""}`;
-    const bn = `${b.employeeName ?? ""}|${b.roleName ?? ""}`;
-    return an.localeCompare(bn);
-  });
-  return {
-    summary: r.summary,
-    employeeSummaries: sorted.map((s) => {
-      const { employeeId: _eid, ...rest } = s;
-      return rest;
-    }),
-    roleConfigs: r.roleConfigs,
-  };
-}
-
-function nearEqual(a: unknown, b: unknown, epsilon = 0.005): boolean {
-  if (typeof a === "number" && typeof b === "number") {
-    return Math.abs(a - b) <= epsilon;
-  }
-  return Object.is(a, b);
-}
-
-function deepDiff(
-  a: unknown,
-  b: unknown,
-  path: string = "",
-  diffs: string[] = [],
-): string[] {
-  if (a === b) return diffs;
-  if (typeof a !== typeof b) {
-    diffs.push(`${path}: type ${typeof a} vs ${typeof b}`);
-    return diffs;
-  }
-  if (a === null || b === null) {
-    if (a !== b) diffs.push(`${path}: ${JSON.stringify(a)} vs ${JSON.stringify(b)}`);
-    return diffs;
-  }
-  if (typeof a !== "object") {
-    if (!nearEqual(a, b)) {
-      diffs.push(`${path}: ${JSON.stringify(a)} vs ${JSON.stringify(b)}`);
+async function employeeIdentityMap(): Promise<Map<string, string>> {
+  const ids = new Map<string, string>();
+  const legacyIds = new Set<string>();
+  let cursor: string | null = null;
+  for (;;) {
+    const result: { page: Array<{ _id: string; legacyId?: string }>; isDone: boolean; continueCursor: string } =
+      await convex.query(anyApi.etl.auditPage, { table: "employees", paginationOpts: { numItems: 500, cursor } });
+    for (const row of result.page) {
+      if (!row.legacyId || legacyIds.has(row.legacyId)) throw new Error("Missing or duplicate source employee identity");
+      ids.set(row._id, row.legacyId);
+      legacyIds.add(row.legacyId);
     }
-    return diffs;
+    if (result.isDone) return ids;
+    cursor = result.continueCursor;
   }
-  if (Array.isArray(a) !== Array.isArray(b)) {
-    diffs.push(`${path}: array vs object`);
-    return diffs;
-  }
-  if (Array.isArray(a) && Array.isArray(b)) {
-    if (a.length !== b.length) {
-      diffs.push(`${path}: length ${a.length} vs ${b.length}`);
-    }
-    const n = Math.min(a.length, b.length);
-    for (let i = 0; i < n; i++) deepDiff(a[i], b[i], `${path}[${i}]`, diffs);
-    return diffs;
-  }
-  const ao = a as Record<string, unknown>;
-  const bo = b as Record<string, unknown>;
-  const keys = new Set([...Object.keys(ao), ...Object.keys(bo)]);
-  for (const k of keys) deepDiff(ao[k], bo[k], path ? `${path}.${k}` : k, diffs);
-  return diffs;
 }
 
 async function main() {
   console.log(`Comparing reports: ${START_DATE} → ${END_DATE}`);
+  const identities = await employeeIdentityMap();
   const [oldR, newR] = await Promise.all([computeOldFromPostgres(), fetchNew()]);
   console.log(
     `  old: ${oldR.employeeSummaries.length} summaries, ${Object.keys(oldR.roleConfigs).length} roles`,
@@ -212,7 +168,7 @@ async function main() {
   console.log(
     `  new: ${newR.employeeSummaries.length} summaries, ${Object.keys(newR.roleConfigs).length} roles`,
   );
-  const diffs = deepDiff(normalize(oldR), normalize(newR));
+  const diffs = reportDiff(normalizeReport(oldR), normalizeReport(newR, identities));
   if (diffs.length === 0) {
     console.log("PARITY OK — no diffs.");
     return;
@@ -225,7 +181,8 @@ async function main() {
 
 main()
   .catch((e) => {
-    console.error(e);
-    process.exit(1);
+    console.error("Parity audit failed; inspect the restricted source/target configuration locally. No payroll values were logged.");
+    void e;
+    process.exitCode = 1;
   })
   .finally(() => prisma.$disconnect());

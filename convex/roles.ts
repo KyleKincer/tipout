@@ -1,9 +1,10 @@
 import { v, ConvexError } from "convex/values";
 import { mutation, query, type QueryCtx } from "./_generated/server";
 import { serializeRoleBare, serializeRoleConfig, serializeRoleWithConfigs } from "./lib/serialize";
-import { requireAdmin } from "./lib/acl";
+import { requireAdmin, requireAuthenticated } from "./lib/acl";
 import { roleWithConfigsValidator } from "./lib/validators";
 import type { Doc, Id } from "./_generated/dataModel";
+import { resolveLegacyDoc } from "./lib/legacyIds";
 
 async function getActiveConfigs(
   ctx: QueryCtx,
@@ -20,6 +21,7 @@ export const list = query({
   args: {},
   returns: v.array(roleWithConfigsValidator),
   handler: async (ctx) => {
+    await requireAuthenticated(ctx);
     const roles = await ctx.db.query("roles").collect();
     roles.sort((a, b) => a.name.localeCompare(b.name));
     const results = [];
@@ -35,12 +37,17 @@ export const list = query({
 });
 
 export const get = query({
-  args: { id: v.id("roles") },
+  args: { id: v.string() },
   returns: v.union(roleWithConfigsValidator, v.null()),
   handler: async (ctx, { id }) => {
-    const role = await ctx.db.get(id);
+    await requireAuthenticated(ctx);
+    const role = await resolveLegacyDoc(ctx, "roles", id);
     if (!role) return null;
-    const configs = await getActiveConfigs(ctx, id);
+    // The editor must round-trip closed configurations as well as current ones.
+    const configs = await ctx.db
+      .query("roleConfigs")
+      .withIndex("by_role", (q) => q.eq("roleId", role._id))
+      .collect();
     return serializeRoleWithConfigs(role, configs);
   },
 });
@@ -74,7 +81,7 @@ export const update = mutation({
     await requireAdmin(ctx);
     const existing = await ctx.db.get(id);
     if (!existing) throw new ConvexError("Role not found");
-    const patch: Record<string, unknown> = { updatedAt: Date.now() };
+    const patch: Record<string, unknown> = { updatedAt: Math.max(Date.now(), existing.updatedAt + 1) };
     if (name !== undefined) patch.name = name;
     if (basePayRate !== undefined) patch.basePayRate = basePayRate;
     await ctx.db.patch(id, patch);
@@ -102,6 +109,14 @@ export const remove = mutation({
       .query("roleConfigs")
       .withIndex("by_role", (q) => q.eq("roleId", id))
       .collect();
+    // Match the optional Prisma DefaultRole relation's ON DELETE SET NULL.
+    const employees = await ctx.db
+      .query("employees")
+      .withIndex("by_default_role", (q) => q.eq("defaultRoleId", id))
+      .collect();
+    for (const employee of employees) {
+      await ctx.db.patch(employee._id, { defaultRoleId: undefined });
+    }
     for (const c of configs) await ctx.db.delete(c._id);
     await ctx.db.delete(id);
     return { success: true };

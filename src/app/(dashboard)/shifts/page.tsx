@@ -7,6 +7,7 @@ import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import { AdminOnly } from '@/components/RoleBasedUI'
 import { calculateTipouts, roleReceivesTipoutType } from '@/utils/tipoutCalculations'
+import { getShiftReportHref } from '@/utils/shiftReportLink'
 
 type Employee = {
   id: string
@@ -46,7 +47,11 @@ function ShiftsContent() {
   const [isLoading, setIsLoading] = useState(true)
   const [isFilterLoading, setIsFilterLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [isDateRange, setIsDateRange] = useState(false)
+  const [isDateRange, setIsDateRange] = useState(() => {
+    const start = searchParams.get('startDate')
+    const end = searchParams.get('endDate')
+    return !!(start && end && start !== end)
+  })
   const [filters, setFilters] = useState(() => {
     return {
       startDate: searchParams.get('startDate') || format(new Date(), 'yyyy-MM-dd'),
@@ -158,7 +163,7 @@ function ShiftsContent() {
         <div className="sm:flex-auto">
           <h1 className="text-2xl font-semibold text-[var(--foreground)]">shifts</h1>
           <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
-            view and manage employee shifts and tipouts.
+            view and manage employee shifts and tipouts paid.
           </p>
         </div>
         <div className="mt-4 sm:ml-16 sm:mt-0 sm:flex-none">
@@ -169,6 +174,19 @@ function ShiftsContent() {
             New Shift
           </Link>
         </div>
+      </div>
+
+      <div className="mt-6 rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-100">
+        <p>
+          This table shows tipouts paid from each shift, not tipouts received. A $0.00 here
+          does not mean the employee received no tipout. Reports includes received tipouts and final payroll totals.
+        </p>
+        <Link
+          href={getShiftReportHref(filters, isDateRange)}
+          className="mt-2 inline-block font-medium underline underline-offset-2 hover:no-underline"
+        >
+          View received tipouts and payroll totals in Reports
+        </Link>
       </div>
 
       <div className="mt-8 bg-white/50 dark:bg-gray-800/50 shadow sm:rounded-lg border border-gray-200 dark:border-gray-700 transition-all hover:shadow-md">
@@ -356,13 +374,13 @@ function ShiftsContent() {
                     liquor sales
                   </th>
                   <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                    bar tipout
+                    bar tipout paid
                   </th>
                   <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                    host tipout
+                    host tipout paid
                   </th>
                   <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                    sa tipout
+                    sa tipout paid
                   </th>
                   <AdminOnly>
                     <th scope="col" className="relative py-3.5 pl-3 pr-4 sm:pr-6">

@@ -1,41 +1,17 @@
 'use client'
 
-import { useEffect, useState, Suspense } from 'react'
+import { useCallback, useEffect, useState, Suspense } from 'react'
 import { format } from 'date-fns'
 import Link from 'next/link'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import { AdminOnly } from '@/components/RoleBasedUI'
-import { calculateTipouts, roleReceivesTipoutType } from '@/utils/tipoutCalculations'
-import { getShiftReportHref } from '@/utils/shiftReportLink'
+import type { ShiftReportResult } from '@/utils/reportCalculations'
+import { filterShiftReportResults } from '@/utils/shiftReportRows'
 
 type Employee = {
   id: string
   name: string
-}
-
-type Role = {
-  id: string
-  name: string
-  basePayRate: number
-  configs: {
-    id: string
-    tipoutType: string
-    percentageRate: number
-    effectiveFrom: string
-    effectiveTo: string | null
-  }[]
-}
-
-type Shift = {
-  id: string
-  date: string
-  employee: Employee
-  role: Role
-  hours: number
-  cashTips: number
-  creditTips: number
-  liquorSales: number
 }
 
 // Create a new client component for the shifts content
@@ -43,7 +19,7 @@ function ShiftsContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const pathname = usePathname()
-  const [shifts, setShifts] = useState<Shift[]>([])
+  const [shifts, setShifts] = useState<ShiftReportResult[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isFilterLoading, setIsFilterLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -84,34 +60,39 @@ function ShiftsContent() {
     router.push(newUrl)
   }, [filters, pathname, router, isDateRange])
 
-  const fetchShifts = async () => {
+  const fetchShifts = useCallback(async (signal?: AbortSignal) => {
     try {
       setIsFilterLoading(true)
+      setError(null)
+      // The report endpoint loads every contributor for the selected days.
+      // Employee and role filters are applied below, only after daily allocation.
       const queryParams = new URLSearchParams({
         startDate: filters.startDate,
-        ...(isDateRange && { endDate: filters.endDate }),
-        ...(filters.employeeId && { employeeId: filters.employeeId }),
-        ...(filters.role && { role: filters.role }),
+        endDate: isDateRange ? filters.endDate : filters.startDate,
       })
-
-      const response = await fetch(`/api/shifts?${queryParams}`)
-      if (!response.ok) {
-        throw new Error('Failed to fetch shifts')
-      }
+      const response = await fetch(`/api/reports?${queryParams}`, { signal })
+      if (!response.ok) throw new Error('Failed to fetch shift report')
       const data = await response.json()
-      setShifts(data)
+      if (!Array.isArray(data.shiftResults)) throw new Error('Shift report results are unavailable')
+      if (!signal?.aborted) setShifts(data.shiftResults)
     } catch (err) {
-      setError('Failed to load shifts')
-      console.error('Error loading shifts:', err)
+      if (!signal?.aborted) {
+        setError('Failed to load shifts')
+        console.error('Error loading shifts:', err)
+      }
     } finally {
-      setIsLoading(false)
-      setIsFilterLoading(false)
+      if (!signal?.aborted) {
+        setIsLoading(false)
+        setIsFilterLoading(false)
+      }
     }
-  }
+  }, [filters.startDate, filters.endDate, isDateRange])
 
   useEffect(() => {
-    fetchShifts()
-  }, [filters])
+    const controller = new AbortController()
+    fetchShifts(controller.signal)
+    return () => controller.abort()
+  }, [fetchShifts])
 
   const handleDelete = async (shiftId: string) => {
     if (!confirm('Are you sure you want to delete this shift?')) {
@@ -135,19 +116,7 @@ function ShiftsContent() {
     }
   }
 
-  // Group shifts by date to determine if hosts/SAs worked each day
-  const shiftsByDate = shifts.reduce((acc, shift) => {
-    // Parse the date and adjust for timezone
-    const date = new Date(shift.date)
-    // Add timezone offset to get to local time
-    date.setMinutes(date.getMinutes() + date.getTimezoneOffset())
-    const dateStr = format(date, 'yyyy-MM-dd')
-    if (!acc[dateStr]) {
-      acc[dateStr] = []
-    }
-    acc[dateStr].push(shift)
-    return acc
-  }, {} as Record<string, Shift[]>)
+  const displayedShifts = filterShiftReportResults(shifts, filters)
 
   if (isLoading) {
     return <LoadingSpinner />
@@ -163,7 +132,7 @@ function ShiftsContent() {
         <div className="sm:flex-auto">
           <h1 className="text-2xl font-semibold text-[var(--foreground)]">shifts</h1>
           <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
-            view and manage employee shifts and tipouts paid.
+            view and manage employee shifts and tipouts.
           </p>
         </div>
         <div className="mt-4 sm:ml-16 sm:mt-0 sm:flex-none">
@@ -174,19 +143,6 @@ function ShiftsContent() {
             New Shift
           </Link>
         </div>
-      </div>
-
-      <div className="mt-6 rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-100">
-        <p>
-          This table shows tipouts paid from each shift, not tipouts received. A $0.00 here
-          does not mean the employee received no tipout. Reports includes received tipouts and final payroll totals.
-        </p>
-        <Link
-          href={getShiftReportHref(filters, isDateRange)}
-          className="mt-2 inline-block font-medium underline underline-offset-2 hover:no-underline"
-        >
-          View received tipouts and payroll totals in Reports
-        </Link>
       </div>
 
       <div className="mt-8 bg-white/50 dark:bg-gray-800/50 shadow sm:rounded-lg border border-gray-200 dark:border-gray-700 transition-all hover:shadow-md">
@@ -311,7 +267,7 @@ function ShiftsContent() {
         <div className="mt-8 flex justify-center">
           <LoadingSpinner />
         </div>
-      ) : shifts.length === 0 ? (
+      ) : displayedShifts.length === 0 ? (
         <div className="mt-8 bg-white/50 dark:bg-gray-800/50 shadow sm:rounded-lg border border-gray-200 dark:border-gray-700 p-8">
           <div className="text-center">
             <svg
@@ -368,19 +324,28 @@ function ShiftsContent() {
                     cash tips
                   </th>
                   <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
+                    gross credit tips
+                  </th>
+                  <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
                     credit tips
                   </th>
                   <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
                     liquor sales
                   </th>
                   <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                    bar tipout paid
+                    bar tipout
                   </th>
                   <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                    host tipout paid
+                    host tipout
                   </th>
                   <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                    sa tipout paid
+                    sa tipout
+                  </th>
+                  <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white" title="Credit tips after pooling, received tipouts, and paid tipouts.">
+                    payroll tips
+                  </th>
+                  <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
+                    total tips/hour
                   </th>
                   <AdminOnly>
                     <th scope="col" className="relative py-3.5 pl-3 pr-4 sm:pr-6">
@@ -390,20 +355,12 @@ function ShiftsContent() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                {shifts.map((shift) => {
+                {displayedShifts.map((shift) => {
                   // Parse the date and adjust for timezone
                   const date = new Date(shift.date)
                   // Add timezone offset to get to local time
                   date.setMinutes(date.getMinutes() + date.getTimezoneOffset())
-                  const dateStr = format(date, 'yyyy-MM-dd')
-                  const dayShifts = shiftsByDate[dateStr]
-                  
-                  // Check for role types based on role configurations rather than name matching
-                  const hasHost = dayShifts.some(s => roleReceivesTipoutType(s, 'host'))
-                  const hasSA = dayShifts.some(s => roleReceivesTipoutType(s, 'sa'))
-                  const hasBar = dayShifts.some(s => roleReceivesTipoutType(s, 'bar'))
-                  
-                  const { barTipout, hostTipout, saTipout } = calculateTipouts(shift, hasHost, hasSA, hasBar)
+                  const { barTipout, hostTipout, saTipout } = shift
 
                   return (
                     <tr key={shift.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
@@ -423,19 +380,28 @@ function ShiftsContent() {
                         ${shift.cashTips.toFixed(2)}
                       </td>
                       <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
+                        ${shift.originalCreditTips.toFixed(2)}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
                         ${shift.creditTips.toFixed(2)}
                       </td>
                       <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
                         ${shift.liquorSales.toFixed(2)}
                       </td>
-                      <td className={`whitespace-nowrap px-3 py-4 text-sm ${barTipout !== 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-500 dark:text-gray-400'}`}>
+                      <td className={`whitespace-nowrap px-3 py-4 text-sm ${barTipout < 0 ? 'text-red-600 dark:text-red-400' : barTipout > 0 ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'}`}>
                         ${barTipout.toFixed(2)}
                       </td>
-                      <td className={`whitespace-nowrap px-3 py-4 text-sm ${hostTipout !== 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-500 dark:text-gray-400'}`}>
+                      <td className={`whitespace-nowrap px-3 py-4 text-sm ${hostTipout < 0 ? 'text-red-600 dark:text-red-400' : hostTipout > 0 ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'}`}>
                         ${hostTipout.toFixed(2)}
                       </td>
-                      <td className={`whitespace-nowrap px-3 py-4 text-sm ${saTipout !== 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-500 dark:text-gray-400'}`}>
+                      <td className={`whitespace-nowrap px-3 py-4 text-sm ${saTipout < 0 ? 'text-red-600 dark:text-red-400' : saTipout > 0 ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'}`}>
                         ${saTipout.toFixed(2)}
+                      </td>
+                      <td className={`whitespace-nowrap px-3 py-4 text-sm ${shift.payrollTips < 0 ? 'text-red-600 dark:text-red-400' : shift.payrollTips > 0 ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'}`}>
+                        ${shift.payrollTips.toFixed(2)}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
+                        ${shift.totalTipsPerHour.toFixed(2)}
                       </td>
                       <AdminOnly>
                         <td className="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">

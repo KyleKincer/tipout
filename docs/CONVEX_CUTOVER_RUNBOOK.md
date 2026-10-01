@@ -18,7 +18,7 @@ Status: preparation, not a completed migration. No production data import, domai
 2. Never recalculate or rewrite historical money during ETL. Preserve raw Postgres decimal strings in the restricted snapshot; map operational numbers exactly as the existing app does with `Number(decimal)`
 3. Preserve the existing calculator order, effective-date inclusivity, daily grouping, per-field rounding, and runtime timezone. This migration is not an opportunity to change payroll rules
 4. Role base pay is stored on `Role` in the actual schema, not time-versioned in `RoleConfig`. Preserve that source value and existing behavior; do not invent historical wage-rate records that the source does not contain
-5. All shifts for a day enter report pooling before the employee display filter is applied. The Shifts page describes outgoing amounts as `tipout paid`; incoming allocation and payroll totals belong in Reports
+5. All shifts for a day enter the shared report calculation before employee/role display filters are applied. Shifts uses the resulting per-shift signed received-minus-paid tipouts, pooled cash/credit and payroll tips; Reports aggregates those same unrounded allocations. Multiple shifts retain their original IDs and shares. See the parity matrix for row-versus-summary cent rounding.
 6. Do not silently merge employees or roles by name. Different people may share names. Reconcile using source IDs and explicit legacy-to-Convex maps
 7. No anonymous payroll reads. Clerk issuer/application and role claims must match the current production account boundary. This app is not multi-tenant: verify that the production Clerk app is restricted to the intended workforce before importing payroll
 8. No deletion/overwrite of existing target data on mismatch. A conflict is a stop condition requiring review
@@ -117,7 +117,7 @@ Safe order after code review:
 
 1. Merge the reviewed code into `convex-migration`; do not point the customer domain at it
 2. Verify the exact existing Convex project/deployment and Clerk issuer, take backups, and deploy the matching backend code/schema using existing authorized deployment access. Do not enable the ETL gate yet
-3. Verify anonymous payroll reads are denied and staff/admin reads and writes have the intended permissions. The public compatibility marker must report the new contract
+3. Verify anonymous payroll reads are denied and staff/admin reads and writes have the intended permissions. The public compatibility marker must report `tipout-shift-report-2026-10-01-v3`; verify `reports.get` returns its per-shift `shiftResults` as well as summaries
 4. Rebuild the successor frontend. Its contract gate must pass against that same deployment, followed by normal type/lint/build checks
 5. Verify signed-in browser workflows and run the protected backfill/reconciliation steps before any customer-domain cutover
 

@@ -1,13 +1,17 @@
+import type { ShiftReportResult } from '../../src/lib/reportCalculations';
+
 export type ReportResponse = {
   summary: Record<string, number> | null;
   employeeSummaries: Array<Record<string, string | number | null | undefined>>;
   roleConfigs: Record<string, { barTipout: number; hostTipout: number; sa: number }>;
+  shiftResults?: ShiftReportResult[];
 };
 
 // Names are labels, never an identity key: two employees may share a name.
 export function normalizeReport(
   report: ReportResponse,
   employeeIds?: ReadonlyMap<string, string>,
+  shiftIds?: ReadonlyMap<string, string>,
 ): ReportResponse {
   const summaries: ReportResponse["employeeSummaries"] = report.employeeSummaries.map((row) => {
     const id = String(row.employeeId);
@@ -20,7 +24,22 @@ export function normalizeReport(
     const second = JSON.stringify([b.employeeId, b.roleName]);
     return first.localeCompare(second);
   });
-  return { ...report, employeeSummaries: summaries };
+  const identity = (id: string, ids: ReadonlyMap<string, string> | undefined, entity: string) => {
+    const mapped = ids ? ids.get(id) : id;
+    if (!mapped) throw new Error(`Report contains an unmapped ${entity} identity`);
+    return mapped;
+  };
+  const result: ReportResponse = { ...report, employeeSummaries: summaries };
+  if (report.shiftResults) {
+    // Keep every numeric allocation. Normalize only source identities and output
+    // ordering; never reconcile by a name or hide financial differences.
+    result.shiftResults = report.shiftResults.map(shift => ({
+      ...shift,
+      id: identity(shift.id, shiftIds, 'shift'),
+      employee: { ...shift.employee, id: identity(shift.employee.id, employeeIds, 'employee') },
+    })).sort((a, b) => a.id.localeCompare(b.id));
+  }
+  return result;
 }
 
 // Deliberately report paths only, never payroll amounts or employee names.

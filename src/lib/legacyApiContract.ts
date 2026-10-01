@@ -5,7 +5,7 @@ export type ResolvedReference = { table: LegacyTable; input: string; id: string 
 export type JsonRecord = Record<string, unknown>;
 
 const relationTables: Record<string, LegacyTable> = {
-  employee: 'employees', defaultRole: 'roles', role: 'roles', configs: 'roleConfigs',
+  shiftResults: 'shifts', employee: 'employees', defaultRole: 'roles', role: 'roles', configs: 'roleConfigs',
 };
 const foreignKeyTables: Record<string, LegacyTable> = {
   employeeId: 'employees', roleId: 'roles', defaultRoleId: 'roles',

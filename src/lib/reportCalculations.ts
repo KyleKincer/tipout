@@ -11,16 +11,16 @@ import { isWithinInterval, parseISO, isBefore, isEqual } from 'date-fns';
 // Helper function to find the active configuration for a specific type and date
 const findActiveConfig = (shift: Shift, tipoutType: string): RoleConfig | null => {
   if (!shift.role?.configs) return null;
-  
+
   const shiftDate = parseISO(shift.date); // Parse the shift date string once
-  
+
   const activeConfig = shift.role.configs.find(config => {
     if (config.tipoutType !== tipoutType) return false;
-    
+
     const effectiveFrom = parseISO(config.effectiveFrom);
     const isAfterOrOnFrom = isEqual(shiftDate, effectiveFrom) || isBefore(effectiveFrom, shiftDate);
     if (!isAfterOrOnFrom) return false;
-    
+
     if (config.effectiveTo) {
       const effectiveTo = parseISO(config.effectiveTo);
       const isOnOrBeforeTo = isEqual(shiftDate, effectiveTo) || isBefore(shiftDate, effectiveTo);
@@ -29,7 +29,7 @@ const findActiveConfig = (shift: Shift, tipoutType: string): RoleConfig | null =
       return true;
     }
   });
-  
+
   return activeConfig || null;
 };
 
@@ -42,7 +42,7 @@ const getShiftTipPoolGroup = (shift: Shift): string | null => {
   // A more precise approach might find the active config for a specific *pooling type* if that were a concept.
   if (!shift.role?.configs) return null;
   const shiftDate = parseISO(shift.date);
-  
+
   const relevantConfig = shift.role.configs.find(config => {
      // Check date effectivity first
      const effectiveFrom = parseISO(config.effectiveFrom);
@@ -52,7 +52,7 @@ const getShiftTipPoolGroup = (shift: Shift): string | null => {
        const effectiveTo = parseISO(config.effectiveTo);
        const isOnOrBeforeTo = isEqual(shiftDate, effectiveTo) || isBefore(shiftDate, effectiveTo);
        if (!isOnOrBeforeTo) return false;
-     } 
+     }
      // If effective, check if it defines a tip pool group
      return config.tipPoolGroup; // Return true if tipPoolGroup is defined and truthy
   });
@@ -61,7 +61,7 @@ const getShiftTipPoolGroup = (shift: Shift): string | null => {
 };
 
 // Helper type for intermediate calculations
-type ProcessedShift = Shift & {
+export type ProcessedShift = Shift & {
   originalCashTips: number;
   originalCreditTips: number;
   tipPoolGroup: string | null;
@@ -206,9 +206,10 @@ export const calculateOverallSummary = (shiftsToProcess: Shift[]): ReportSummary
 };
 
 /**
- * Calculates employee/role summaries, performing tip pooling and distribution daily.
+ * Calculates each individual shift using the complete daily pool.
+ * Apply employee/role display filters only AFTER this calculation.
  */
-export const calculateEmployeeRoleSummariesDaily = (shiftsToProcess: Shift[]): EmployeeRoleSummary[] => {
+export const calculateProcessedShiftsDaily = (shiftsToProcess: Shift[]): ProcessedShift[] => {
   const dailyProcessedShifts: ProcessedShift[] = [];
 
   // Get unique dates from the shifts to process
@@ -424,6 +425,10 @@ export const calculateEmployeeRoleSummariesDaily = (shiftsToProcess: Shift[]): E
     });
   }); // --- End of daily loop ---
 
+  return dailyProcessedShifts;
+};
+
+const summarizeProcessedShifts = (dailyProcessedShifts: ProcessedShift[]): EmployeeRoleSummary[] => {
   // --- 6. Aggregate Processed Shifts into Final Summaries ---
   const summaries = new Map<string, EmployeeRoleSummary>();
   dailyProcessedShifts.forEach(procShift => {
@@ -503,4 +508,51 @@ export const calculateEmployeeRoleSummariesDaily = (shiftsToProcess: Shift[]): E
   });
 
   return finalSummaries;
-}; 
+};
+
+export type ShiftReportResult = Omit<ProcessedShift, 'role' | 'configs'> & {
+  role: { name: string };
+  barTipout: number;
+  hostTipout: number;
+  saTipout: number;
+  totalTipsPerHour: number;
+};
+
+/** Both views share the same per-shift allocation, without repeating payroll totals. */
+export const calculateDailyReport = (shifts: Shift[]) => {
+  const processed = calculateProcessedShiftsDaily(shifts);
+  const shiftResults: ShiftReportResult[] = processed.map(shift => {
+    const totalTipsPerHour = shift.hours > 0 ? (shift.cashTips + shift.payrollTips) / shift.hours : 0;
+    const rounded = (amount: number) => Number(amount.toFixed(2));
+    return {
+      // Explicit display DTO: do not repeat historical role configurations on every row.
+      id: shift.id,
+      date: shift.date,
+      employee: { id: shift.employee.id, name: shift.employee.name },
+      role: { name: shift.role.name },
+      hours: shift.hours,
+      cashTips: shift.cashTips,
+      creditTips: shift.creditTips,
+      liquorSales: shift.liquorSales,
+      originalCashTips: shift.originalCashTips,
+      originalCreditTips: shift.originalCreditTips,
+      tipPoolGroup: shift.tipPoolGroup,
+      paidBarTipout: shift.paidBarTipout,
+      paidHostTipout: shift.paidHostTipout,
+      paidSaTipout: shift.paidSaTipout,
+      receivedBarTipout: shift.receivedBarTipout,
+      receivedHostTipout: shift.receivedHostTipout,
+      receivedSaTipout: shift.receivedSaTipout,
+      payrollTips: shift.payrollTips,
+      // Round display values only. Employee summaries still aggregate unrounded allocations.
+      barTipout: rounded(shift.receivedBarTipout - shift.paidBarTipout),
+      hostTipout: rounded(shift.receivedHostTipout - shift.paidHostTipout),
+      saTipout: rounded(shift.receivedSaTipout - shift.paidSaTipout),
+      totalTipsPerHour: rounded(totalTipsPerHour),
+    };
+  });
+  return { shiftResults, employeeSummaries: summarizeProcessedShifts(processed) };
+};
+
+export const calculateEmployeeRoleSummariesDaily = (shifts: Shift[]): EmployeeRoleSummary[] =>
+  calculateDailyReport(shifts).employeeSummaries;

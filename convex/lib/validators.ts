@@ -81,9 +81,35 @@ export const employeeRoleSummaryValidator = v.object({
   tipPoolGroup: v.optional(v.union(v.string(), v.null())),
 });
 
+export const shiftReportResultValidator = v.object({
+  id: v.string(),
+  date: v.string(),
+  employee: v.object({ id: v.string(), name: v.string() }),
+  role: v.object({ name: v.string() }),
+  hours: v.number(),
+  cashTips: v.number(),
+  creditTips: v.number(),
+  liquorSales: v.number(),
+  originalCashTips: v.number(),
+  originalCreditTips: v.number(),
+  tipPoolGroup: v.union(v.string(), v.null()),
+  paidBarTipout: v.number(),
+  paidHostTipout: v.number(),
+  paidSaTipout: v.number(),
+  receivedBarTipout: v.number(),
+  receivedHostTipout: v.number(),
+  receivedSaTipout: v.number(),
+  payrollTips: v.number(),
+  barTipout: v.number(),
+  hostTipout: v.number(),
+  saTipout: v.number(),
+  totalTipsPerHour: v.number(),
+});
+
 export const reportResponseValidator = v.object({
   summary: v.union(reportSummaryValidator, v.null()),
   employeeSummaries: v.array(employeeRoleSummaryValidator),
+  shiftResults: v.array(shiftReportResultValidator),
   roleConfigs: v.record(
     v.string(),
     v.object({

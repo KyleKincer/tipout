@@ -1,9 +1,9 @@
 import { calculateTipouts } from './tipoutCalculations'
-import { calculateEmployeeRoleSummariesDaily } from './reportCalculations'
+import { calculateDailyReport } from './reportCalculations'
 import type { Shift } from '@/types/reports'
 
-describe('paid shift tipouts and received report tipouts', () => {
-  it('keeps paid-only shift values separate from received and payroll report totals', () => {
+describe('report-aligned shift and report tipouts', () => {
+  it('shows signed net tipouts and payroll consistently in both views', () => {
     const common = { date: '2026-09-29T00:00:00.000Z', cashTips: 0, configs: [] }
     const bar: Shift = {
       ...common,
@@ -29,7 +29,11 @@ describe('paid shift tipouts and received report tipouts', () => {
     expect(calculateTipouts(bar, false, false, true).barTipout).toBe(0)
     expect(calculateTipouts(server, false, false, true).barTipout).toBeCloseTo(60.80)
 
-    const summaries = calculateEmployeeRoleSummariesDaily([bar, server])
+    const { employeeSummaries: summaries, shiftResults } = calculateDailyReport([bar, server])
+    expect(shiftResults[0].barTipout).toBe(60.80)
+    expect(shiftResults[1].barTipout).toBe(-60.80)
+    expect(shiftResults[0].payrollTips).toBeCloseTo(214)
+    expect(shiftResults[1].payrollTips).toBeCloseTo(213.80)
     const barSummary = summaries.find(summary => summary.employeeId === 'bartender')!
     const serverSummary = summaries.find(summary => summary.employeeId === 'server')!
     expect(barSummary.totalBarTipout).toBeCloseTo(60.80)

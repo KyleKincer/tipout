@@ -1,5 +1,5 @@
 import { calculateDailyReport } from './reportCalculations'
-import { filterShiftReportResults } from './shiftReportRows'
+import { filterShiftReportResults, payrollTipsBreakdown } from './shiftReportRows'
 import type { Shift, RoleConfig } from '@/types/reports'
 
 const config = (type: 'bar' | 'host' | 'sa', options: Partial<RoleConfig> = {}): RoleConfig => ({
@@ -155,6 +155,61 @@ describe('report-aligned shift rows', () => {
       expect(row).not.toHaveProperty('payrollTotal')
       expect(row).not.toHaveProperty('totalDollarsPerHour')
     }
+  })
+
+  describe('payroll tips breakdown', () => {
+    const sum = (lines: { amount: number }[]) => lines.reduce((total, line) => total + line.amount, 0)
+    const serverRole = { name: 'server', basePayRate: 0, configs: [
+      config('bar', { tipPoolGroup: 'server' }), config('host', { percentageRate: 10, tipPoolGroup: 'server' }),
+    ] }
+    const day = () => calculateDailyReport([
+      // High earner in a pool: gross 115, but pool share is lower; bar tipout uses her own liquor sales.
+      shift('mary', 'mary', 'server', { hours: 4, creditTips: 115, liquorSales: 138, role: serverRole }),
+      shift('other', 'other', 'server', { hours: 6, creditTips: 45, role: serverRole }),
+      shift('bar', 'bartender', 'bar'),
+      shift('host', 'host', 'host', { role: { name: 'host', basePayRate: 0, configs: [
+        config('host', { paysTipout: false, receivesTipout: true, distributionGroup: 'host' }),
+      ] } }),
+    ]).shiftResults
+
+    it('explains a pooled shift as pool share minus bar tipout, with host paid by the pool', () => {
+      const mary = day().find(s => s.id === 'mary')!
+      const { lines, notes } = payrollTipsBreakdown(mary)
+      expect(lines).toEqual([
+        { label: 'server pool share', amount: mary.creditTips },
+        { label: 'bar tipout', amount: -27.6 },
+      ])
+      expect(sum(lines)).toBeCloseTo(mary.payrollTips)
+      expect(notes).toEqual([
+        '$115.00 gross went into the server pool, split by hours',
+        'host tipout $11.50 was paid by the pool before the split',
+      ])
+    })
+
+    it('adds received tipouts for recipients outside a pool', () => {
+      const bar = day().find(s => s.id === 'bar')!
+      const { lines, notes } = payrollTipsBreakdown(bar)
+      expect(lines).toEqual([
+        { label: 'credit tips', amount: 0 },
+        { label: 'bar tipout received', amount: 27.6 },
+      ])
+      expect(sum(lines)).toBeCloseTo(bar.payrollTips)
+      expect(notes).toEqual([])
+    })
+
+    it('subtracts host and sa tipouts directly for non-pooled payers', () => {
+      const result = calculateDailyReport([
+        shift('server', 'server', 'server', { creditTips: 100, liquorSales: 50, role: { name: 'server', basePayRate: 0,
+          configs: [config('bar'), config('host', { percentageRate: 10 })] } }),
+        shift('bar', 'bartender', 'bar'),
+        shift('host', 'host', 'host', { role: { name: 'host', basePayRate: 0, configs: [
+          config('host', { paysTipout: false, receivesTipout: true, distributionGroup: 'host' }),
+        ] } }),
+      ]).shiftResults[0]
+      const { lines } = payrollTipsBreakdown(result)
+      expect(lines.map(l => l.label)).toEqual(['credit tips', 'bar tipout', 'host tipout'])
+      expect(sum(lines)).toBeCloseTo(result.payrollTips)
+    })
   })
 
   it('keeps large report rows compact without historical configurations or wage metadata', () => {

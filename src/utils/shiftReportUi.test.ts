@@ -4,7 +4,7 @@ import { readFileSync } from 'fs'
 import { join } from 'path'
 import { transpileModule, ModuleKind, ScriptTarget, JsxEmit } from 'typescript'
 import { calculateDailyReport } from './reportCalculations'
-import { filterShiftReportResults } from './shiftReportRows'
+import { filterShiftReportResults, payrollTipsBreakdown } from './shiftReportRows'
 import type { Shift } from '@/types/reports'
 
 // Render the actual page source with deterministic framework/auth/data adapters.
@@ -39,7 +39,7 @@ function renderPage(employeeId = '') {
     'next/link': { __esModule: true, default: ({ children, ...props }: React.ComponentProps<'a'>) => React.createElement('a', props, children) },
     '@/components/LoadingSpinner': { __esModule: true, default: () => null },
     '@/components/RoleBasedUI': { AdminOnly: () => null },
-    '@/utils/shiftReportRows': { filterShiftReportResults },
+    '@/utils/shiftReportRows': { filterShiftReportResults, payrollTipsBreakdown },
   }
   const localRequire = (id: string) => id in modules ? modules[id] : jest.requireActual(id)
   new Function('require', 'module', 'exports', code)(localRequire, mockModule, mockModule.exports)
@@ -55,6 +55,8 @@ describe('Shifts page report-aligned rendering', () => {
     expect(html).toContain('$213.80')
     expect(html).toContain('gross credit tips')
     expect(html).toContain('payroll tips')
+    expect(html).toContain('pool share')
+    expect(html).toContain('aria-expanded="false"')
     expect(html).not.toContain('payroll total')
     expect(html).not.toContain('base pay rate')
     expect(html).not.toContain('total $/hour')

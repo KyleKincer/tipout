@@ -7,7 +7,7 @@ import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import { AdminOnly } from '@/components/RoleBasedUI'
 import type { ShiftReportResult } from '@/utils/reportCalculations'
-import { filterShiftReportResults } from '@/utils/shiftReportRows'
+import { filterShiftReportResults, payrollTipsBreakdown } from '@/utils/shiftReportRows'
 
 type Employee = {
   id: string
@@ -117,6 +117,7 @@ function ShiftsContent() {
   }
 
   const displayedShifts = filterShiftReportResults(shifts, filters)
+  const [expandedPayrollId, setExpandedPayrollId] = useState<string | null>(null)
 
   if (isLoading) {
     return <LoadingSpinner />
@@ -132,7 +133,10 @@ function ShiftsContent() {
         <div className="sm:flex-auto">
           <h1 className="text-2xl font-semibold text-[var(--foreground)]">shifts</h1>
           <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
-            view and manage employee shifts and tipouts.
+            view and manage employee shifts and tipouts.{' '}
+            <Link href="/how-tips-work" className="text-indigo-600 hover:underline dark:text-indigo-400">
+              how are tips calculated?
+            </Link>
           </p>
         </div>
         <div className="mt-4 sm:ml-16 sm:mt-0 sm:flex-none">
@@ -326,8 +330,8 @@ function ShiftsContent() {
                   <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
                     gross credit tips
                   </th>
-                  <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                    credit tips
+                  <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white" title="For pooled roles: this shift's hourly share of the pool's credit tips, after the pool pays host and SA tipouts. Blank for roles that don't pool.">
+                    pool share
                   </th>
                   <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
                     liquor sales
@@ -341,7 +345,7 @@ function ShiftsContent() {
                   <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
                     sa tipout
                   </th>
-                  <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white" title="Credit tips after pooling, received tipouts, and paid tipouts.">
+                  <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white" title="Pool share (or credit tips if not pooled) plus tipouts received, minus tipouts paid. Tap an amount to see the math.">
                     payroll tips
                   </th>
                   <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
@@ -361,9 +365,11 @@ function ShiftsContent() {
                   // Add timezone offset to get to local time
                   date.setMinutes(date.getMinutes() + date.getTimezoneOffset())
                   const { barTipout, hostTipout, saTipout } = shift
+                  const isPayrollExpanded = expandedPayrollId === shift.id
+                  const payrollBreakdown = payrollTipsBreakdown(shift)
 
                   return (
-                    <tr key={shift.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                    <tr key={shift.id} className={`hover:bg-gray-50 dark:hover:bg-gray-700/50 ${isPayrollExpanded ? 'align-top' : ''}`}>
                       <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-[var(--foreground)] sm:pl-6">
                         {format(date, 'MMM d, yyyy')}
                       </td>
@@ -383,7 +389,7 @@ function ShiftsContent() {
                         ${shift.originalCreditTips.toFixed(2)}
                       </td>
                       <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
-                        ${shift.creditTips.toFixed(2)}
+                        {shift.tipPoolGroup ? `$${shift.creditTips.toFixed(2)}` : '—'}
                       </td>
                       <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
                         ${shift.liquorSales.toFixed(2)}
@@ -397,8 +403,37 @@ function ShiftsContent() {
                       <td className={`whitespace-nowrap px-3 py-4 text-sm ${saTipout < 0 ? 'text-red-600 dark:text-red-400' : saTipout > 0 ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'}`}>
                         ${saTipout.toFixed(2)}
                       </td>
-                      <td className={`whitespace-nowrap px-3 py-4 text-sm ${shift.payrollTips < 0 ? 'text-red-600 dark:text-red-400' : shift.payrollTips > 0 ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'}`}>
-                        ${shift.payrollTips.toFixed(2)}
+                      <td className={`px-3 py-4 text-sm ${isPayrollExpanded ? '' : 'whitespace-nowrap'} ${shift.payrollTips < 0 ? 'text-red-600 dark:text-red-400' : shift.payrollTips > 0 ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'}`}>
+                        <button
+                          type="button"
+                          onClick={() => setExpandedPayrollId(isPayrollExpanded ? null : shift.id)}
+                          aria-expanded={isPayrollExpanded}
+                          className="underline decoration-dotted underline-offset-4"
+                        >
+                          ${shift.payrollTips.toFixed(2)}
+                        </button>
+                        {isPayrollExpanded && (
+                          <div className="mt-2 min-w-[15rem] text-xs text-gray-600 dark:text-gray-300">
+                            <dl className="space-y-0.5">
+                              {payrollBreakdown.lines.map(line => (
+                                <div key={line.label} className="flex justify-between gap-4">
+                                  <dt>{line.label}</dt>
+                                  <dd className="tabular-nums">${line.amount.toFixed(2)}</dd>
+                                </div>
+                              ))}
+                              <div className="flex justify-between gap-4 border-t border-gray-300 dark:border-gray-600 pt-0.5 font-semibold">
+                                <dt>payroll tips</dt>
+                                <dd className="tabular-nums">${shift.payrollTips.toFixed(2)}</dd>
+                              </div>
+                            </dl>
+                            {payrollBreakdown.notes.map(note => (
+                              <p key={note} className="mt-1 text-gray-500 dark:text-gray-400">{note}</p>
+                            ))}
+                            <Link href="/how-tips-work" className="mt-1 inline-block text-indigo-600 hover:underline dark:text-indigo-400">
+                              how this works
+                            </Link>
+                          </div>
+                        )}
                       </td>
                       <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
                         ${shift.totalTipsPerHour.toFixed(2)}

@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "test": "jest",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "backfill:role-versions": "esbuild scripts/backfill-role-versions.ts --bundle --platform=node --packages=external --tsconfig=tsconfig.json --outfile=.tmp/backfill-role-versions.js --log-level=warning && node .tmp/backfill-role-versions.js"
   },
   "dependencies": {
     "@clerk/nextjs": "^6.12.10",

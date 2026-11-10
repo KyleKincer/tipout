@@ -32,6 +32,13 @@ export type Shift = {
     name: string;
     basePayRate: number;
     configs: RoleConfig[];
+    /**
+     * The role's tip pool for this shift's date, resolved from its settings version.
+     * When present (even null) it wins over tipPoolGroup on individual configs.
+     */
+    tipPoolGroup?: string | null;
+    /** The settings version used for this shift, when resolved from versions. */
+    versionId?: string | null;
   };
   hours: number;
   cashTips: number;
@@ -82,7 +89,8 @@ export type EmployeeRoleSummary = {
   cashTipsPerHour: number;
   creditTipsPerHour: number; // Based on totalPayrollTips / totalHours
   totalTipsPerHour: number;  // Based on (totalCashTips + totalPayrollTips) / totalHours
-  basePayRate: number;
+  basePayRate: number;        // Average base pay per hour over the shifts (rates can change mid-range)
+  totalBasePay: number;       // Sum of hours × the base pay rate in effect on each shift's date
   totalPayrollTips: number;  // Represents the value used for payroll (CreditTips + Net Tipouts)
   totalLiquorSales: number;
   payrollTotal: number;      // Calculated total payroll amount (Base Pay + Payroll Tips)

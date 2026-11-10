@@ -37,7 +37,9 @@ const findActiveConfig = (shift: Shift, tipoutType: string): RoleConfig | null =
  * Finds the tipPoolGroup for a given shift based on its active config.
  */
 const getShiftTipPoolGroup = (shift: Shift): string | null => {
-  // Find any active config first, then check its tipPoolGroup
+  // Settings resolved from a dated version carry the pool on the role itself.
+  if (shift.role && shift.role.tipPoolGroup !== undefined) return shift.role.tipPoolGroup || null;
+  // Legacy shape: find any active config first, then check its tipPoolGroup
   // This assumes a role belongs entirely to one pool based on any active config.
   // A more precise approach might find the active config for a specific *pooling type* if that were a concept.
   if (!shift.role?.configs) return null;
@@ -428,83 +430,90 @@ export const calculateProcessedShiftsDaily = (shiftsToProcess: Shift[]): Process
   return dailyProcessedShifts;
 };
 
-const summarizeProcessedShifts = (dailyProcessedShifts: ProcessedShift[]): EmployeeRoleSummary[] => {
-  // --- 6. Aggregate Processed Shifts into Final Summaries ---
+/** The per-shift fields employee summaries are built from. Shift results and snapshots both have them. */
+export type SummarizableShift = {
+  employee: { id: string; name: string };
+  role: { name: string };
+  basePayRate: number;
+  hours: number;
+  cashTips: number;
+  creditTips: number;
+  originalCreditTips: number;
+  liquorSales: number;
+  tipPoolGroup: string | null;
+  paidBarTipout: number;
+  paidHostTipout: number;
+  paidSaTipout: number;
+  receivedBarTipout: number;
+  receivedHostTipout: number;
+  receivedSaTipout: number;
+  payrollTips: number;
+};
+
+/** Totals per employee and role. Base pay is summed shift by shift, so a pay-rate change mid-range is exact. */
+export const summarizeShiftResults = (shifts: SummarizableShift[]): EmployeeRoleSummary[] => {
   const summaries = new Map<string, EmployeeRoleSummary>();
-  dailyProcessedShifts.forEach(procShift => {
-      const key = `${procShift.employee.id}-${procShift.role.name}`;
-      let existing = summaries.get(key);
-
-       if (!existing) {
-            existing = {
-                employeeId: procShift.employee.id,
-                employeeName: procShift.employee.name,
-                roleName: procShift.role.name,
-                totalHours: 0,
-                totalCashTips: 0,        // Accumulate NET cash tips (pooled or original)
-                totalCreditTips: 0,      // Accumulate NET credit tips (pooled or original) - Base for display
-                totalGrossCreditTips: 0, // Accumulate original gross credit tips
-                // These now represent Received - Paid for this employee/role combo
-                totalBarTipout: 0,
-                totalHostTipout: 0,
-                totalSaTipout: 0,
-                cashTipsPerHour: 0,
-                creditTipsPerHour: 0,
-                totalTipsPerHour: 0,
-                basePayRate: Number(procShift.role.basePayRate),
-                totalPayrollTips: 0,     // Accumulate final payrollTips amount
-                totalLiquorSales: 0,
-                payrollTotal: 0,
-                tipPoolGroup: procShift.tipPoolGroup, // Assign first time, assume constant
-            };
-        }
-
-
-      // Accumulate totals from the processed shift
-      existing.totalHours += Number(procShift.hours);
-      existing.totalCashTips += procShift.cashTips; // Use net pooled or original cash
-      existing.totalCreditTips += procShift.creditTips; // Use net pooled or original credit (base for display)
-      existing.totalGrossCreditTips += procShift.originalCreditTips; // Accumulate original gross credit
-      existing.totalLiquorSales += Number(procShift.liquorSales);
-      // Accumulate Net Tipouts (Received - Paid for this summary group)
-      existing.totalBarTipout += procShift.receivedBarTipout - procShift.paidBarTipout;
-      existing.totalHostTipout += procShift.receivedHostTipout - procShift.paidHostTipout;
-      existing.totalSaTipout += procShift.receivedSaTipout - procShift.paidSaTipout;
-      existing.totalPayrollTips += procShift.payrollTips; // Use the calculated payrollTips
-      // Update base pay rate - might need logic if it can change mid-period for same emp/role
-      existing.basePayRate = Number(procShift.role.basePayRate);
-
-      summaries.set(key, existing);
+  shifts.forEach(shift => {
+    const key = `${shift.employee.id}-${shift.role.name}`;
+    const existing: EmployeeRoleSummary = summaries.get(key) ?? {
+      employeeId: shift.employee.id,
+      employeeName: shift.employee.name,
+      roleName: shift.role.name,
+      totalHours: 0,
+      totalCashTips: 0,        // NET cash tips (pooled or original)
+      totalCreditTips: 0,      // NET credit tips (pooled or original)
+      totalGrossCreditTips: 0, // original gross credit tips
+      totalBarTipout: 0,       // received - paid
+      totalHostTipout: 0,
+      totalSaTipout: 0,
+      cashTipsPerHour: 0,
+      creditTipsPerHour: 0,
+      totalTipsPerHour: 0,
+      basePayRate: 0,
+      totalBasePay: 0,
+      totalPayrollTips: 0,
+      totalLiquorSales: 0,
+      payrollTotal: 0,
+      tipPoolGroup: shift.tipPoolGroup,
+    };
+    const hours = Number(shift.hours);
+    existing.totalHours += hours;
+    existing.totalCashTips += shift.cashTips;
+    existing.totalCreditTips += shift.creditTips;
+    existing.totalGrossCreditTips += shift.originalCreditTips;
+    existing.totalLiquorSales += Number(shift.liquorSales);
+    existing.totalBarTipout += shift.receivedBarTipout - shift.paidBarTipout;
+    existing.totalHostTipout += shift.receivedHostTipout - shift.paidHostTipout;
+    existing.totalSaTipout += shift.receivedSaTipout - shift.paidSaTipout;
+    existing.totalPayrollTips += shift.payrollTips;
+    existing.totalBasePay += hours * Number(shift.basePayRate);
+    if (!existing.tipPoolGroup && shift.tipPoolGroup) existing.tipPoolGroup = shift.tipPoolGroup;
+    summaries.set(key, existing);
   });
 
-  // --- 7. Final calculations on aggregated summaries ---
   const finalSummaries = Array.from(summaries.values());
+  const r2 = (n: number) => parseFloat(n.toFixed(2));
   finalSummaries.forEach(summary => {
-    // Calculate final per-hour rates based on aggregated totals
-    // Cash tips per hour uses the net/original cash amount.
-    summary.cashTipsPerHour = summary.totalHours > 0 ? summary.totalCashTips / summary.totalHours : 0;
-    // Credit tips per hour uses the final payrollTips amount.
-    summary.creditTipsPerHour = summary.totalHours > 0 ? summary.totalPayrollTips / summary.totalHours : 0;
-    // Total tips per hour is cash + payroll tips component.
-    summary.totalTipsPerHour = summary.totalHours > 0 ? (summary.totalCashTips + summary.totalPayrollTips) / summary.totalHours : 0;
+    const h = summary.totalHours;
+    summary.cashTipsPerHour = h > 0 ? summary.totalCashTips / h : 0;
+    summary.creditTipsPerHour = h > 0 ? summary.totalPayrollTips / h : 0;
+    summary.totalTipsPerHour = h > 0 ? (summary.totalCashTips + summary.totalPayrollTips) / h : 0;
+    summary.basePayRate = h > 0 ? summary.totalBasePay / h : 0;
+    summary.payrollTotal = summary.totalBasePay + summary.totalPayrollTips;
 
-    // Calculate final payroll total
-    summary.payrollTotal = (summary.basePayRate * summary.totalHours) + summary.totalPayrollTips;
-
-    // Optional: Round final values for cleaner display
-    summary.totalCashTips = parseFloat(summary.totalCashTips.toFixed(2));
-    summary.totalCreditTips = parseFloat(summary.totalCreditTips.toFixed(2)); // This is the NET pool or original amount
-    summary.totalGrossCreditTips = parseFloat(summary.totalGrossCreditTips.toFixed(2));
-    summary.totalBarTipout = parseFloat(summary.totalBarTipout.toFixed(2));
-    summary.totalHostTipout = parseFloat(summary.totalHostTipout.toFixed(2));
-    summary.totalSaTipout = parseFloat(summary.totalSaTipout.toFixed(2));
-    summary.totalPayrollTips = parseFloat(summary.totalPayrollTips.toFixed(2));
-    summary.payrollTotal = parseFloat(summary.payrollTotal.toFixed(2));
-    summary.cashTipsPerHour = parseFloat(summary.cashTipsPerHour.toFixed(2));
-    summary.creditTipsPerHour = parseFloat(summary.creditTipsPerHour.toFixed(2));
-    summary.totalTipsPerHour = parseFloat(summary.totalTipsPerHour.toFixed(2));
-
-
+    summary.totalCashTips = r2(summary.totalCashTips);
+    summary.totalCreditTips = r2(summary.totalCreditTips);
+    summary.totalGrossCreditTips = r2(summary.totalGrossCreditTips);
+    summary.totalBarTipout = r2(summary.totalBarTipout);
+    summary.totalHostTipout = r2(summary.totalHostTipout);
+    summary.totalSaTipout = r2(summary.totalSaTipout);
+    summary.totalPayrollTips = r2(summary.totalPayrollTips);
+    summary.totalBasePay = r2(summary.totalBasePay);
+    summary.basePayRate = r2(summary.basePayRate);
+    summary.payrollTotal = r2(summary.payrollTotal);
+    summary.cashTipsPerHour = r2(summary.cashTipsPerHour);
+    summary.creditTipsPerHour = r2(summary.creditTipsPerHour);
+    summary.totalTipsPerHour = r2(summary.totalTipsPerHour);
   });
 
   return finalSummaries;
@@ -512,6 +521,10 @@ const summarizeProcessedShifts = (dailyProcessedShifts: ProcessedShift[]): Emplo
 
 export type ShiftReportResult = Omit<ProcessedShift, 'role' | 'configs'> & {
   role: { name: string };
+  /** Base pay rate in effect on this shift's date. */
+  basePayRate: number;
+  /** Settings version this shift was calculated with, when known. */
+  versionId: string | null;
   barTipout: number;
   hostTipout: number;
   saTipout: number;
@@ -530,6 +543,8 @@ export const calculateDailyReport = (shifts: Shift[]) => {
       date: shift.date,
       employee: { id: shift.employee.id, name: shift.employee.name },
       role: { name: shift.role.name },
+      basePayRate: Number(shift.role.basePayRate),
+      versionId: shift.role.versionId ?? null,
       hours: shift.hours,
       cashTips: shift.cashTips,
       creditTips: shift.creditTips,
@@ -551,7 +566,7 @@ export const calculateDailyReport = (shifts: Shift[]) => {
       totalTipsPerHour: rounded(totalTipsPerHour),
     };
   });
-  return { shiftResults, employeeSummaries: summarizeProcessedShifts(processed) };
+  return { shiftResults, employeeSummaries: summarizeShiftResults(shiftResults) };
 };
 
 export const calculateEmployeeRoleSummariesDaily = (shifts: Shift[]): EmployeeRoleSummary[] =>

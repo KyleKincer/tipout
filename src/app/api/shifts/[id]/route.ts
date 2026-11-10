@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server'
+import { usesConvex, viaConvex } from '@/lib/convexServer'
+import { api } from '@convex/_generated/api'
 import { prisma } from '@/lib/prisma'
 import { errorResponse, HttpError, requireAdmin, requireUser } from '@/lib/apiAuth'
 import { audit } from '@/lib/audit'
@@ -10,6 +12,10 @@ type Params = { params: Promise<{ id: string }> }
 
 /** One shift, with the role settings in effect on its date. */
 export async function GET(_request: Request, { params }: Params) {
+  if (usesConvex()) {
+    const { id } = await params
+    return viaConvex('Failed to fetch shift', c => c.query(api.shifts.get, { id }))
+  }
   try {
     await requireUser()
     const { id } = await params
@@ -23,6 +29,11 @@ export async function GET(_request: Request, { params }: Params) {
 
 /** Change a shift. Neither its old nor its new date may be in a locked pay period. */
 export async function PUT(request: Request, { params }: Params) {
+  if (usesConvex()) {
+    const { id } = await params
+    const body = await request.json()
+    return viaConvex('Failed to update shift', async c => c.mutation(api.shifts.update, { id, ...parseShiftInput(body) }))
+  }
   try {
     const actor = await requireAdmin()
     const { id } = await params
@@ -49,6 +60,10 @@ export async function PUT(request: Request, { params }: Params) {
 
 /** Delete a shift. Not allowed inside a locked pay period. */
 export async function DELETE(_request: Request, { params }: Params) {
+  if (usesConvex()) {
+    const { id } = await params
+    return viaConvex('Failed to delete shift', c => c.mutation(api.shifts.remove, { id }))
+  }
   try {
     const actor = await requireAdmin()
     const { id } = await params

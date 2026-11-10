@@ -2,6 +2,8 @@ import Link from 'next/link'
 import { prisma } from '@/lib/prisma'
 import { buildExampleNight, summarizeRoleRates, type RateRole } from '@/utils/howTipsWork'
 import { loadVersions } from '@/lib/roleData'
+import { convexForUser, usesConvex } from '@/lib/convexServer'
+import { api } from '@convex/_generated/api'
 import { formatDay } from '@/utils/dateLabels'
 import { isDateOnly, todayInRestaurant, toEngineRole, versionOn, type DateOnly } from '@/utils/roleVersions'
 import type { TipoutType } from '@/types/reports'
@@ -16,6 +18,13 @@ const pct = (n: number) => `${Number(n.toFixed(2))}%`
 
 /** Each role's settings on the given day, from its dated settings history. */
 async function loadRoles(day: DateOnly): Promise<RateRole[]> {
+  if (usesConvex()) {
+    const rows = await (await convexForUser()).query(api.roles.settingsOn, { date: day })
+    return rows.map(({ name, version }) => {
+      const engine = toEngineRole(name, version, day)
+      return { name, basePayRate: engine.basePayRate, configs: engine.configs, tipPoolGroup: engine.tipPoolGroup }
+    })
+  }
   const roles = await prisma.role.findMany({ where: { active: true }, orderBy: { name: 'asc' } })
   const versions = await loadVersions(prisma)
   return roles.map(role => {

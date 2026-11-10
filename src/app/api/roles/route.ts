@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server'
+import { usesConvex, viaConvex } from '@/lib/convexServer'
+import { api } from '@convex/_generated/api'
 import { prisma } from '@/lib/prisma'
 import { errorResponse, HttpError, requireAdmin, requireUser } from '@/lib/apiAuth'
 import { audit } from '@/lib/audit'
@@ -11,6 +13,10 @@ import { describeSettings, isDateOnly, normalizeSettings, parseSettings, todayIn
  * `configs` keeps the shape the shift forms already read.
  */
 export async function GET(request: Request) {
+  if (usesConvex()) {
+    const date = new URL(request.url).searchParams.get('date') ?? undefined
+    return viaConvex('Failed to fetch roles', c => c.query(api.roles.list, { date }))
+  }
   try {
     await requireUser()
     const param = new URL(request.url).searchParams.get('date')
@@ -41,6 +47,12 @@ export async function GET(request: Request) {
 
 /** Create a role with its first settings, starting on a date. */
 export async function POST(request: Request) {
+  if (usesConvex()) {
+    const body = await request.json()
+    return viaConvex('Failed to create role', c => c.mutation(api.roles.create, {
+      name: String(body.name ?? ''), effectiveFrom: String(body.effectiveFrom ?? ''), settings: parseSettings(body.settings), note: body.note ?? null,
+    }))
+  }
   try {
     const actor = await requireAdmin()
     const body = await request.json()

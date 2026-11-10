@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server'
+import { usesConvex, viaConvex } from '@/lib/convexServer'
+import { api } from '@convex/_generated/api'
 import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { errorResponse, HttpError, requireNamedUser, requireUser } from '@/lib/apiAuth'
@@ -9,6 +11,11 @@ import { isDateOnly } from '@/utils/roleVersions'
 
 /** Shifts, each with the role settings in effect on its own date. */
 export async function GET(request: Request) {
+  if (usesConvex()) {
+    const p = new URL(request.url).searchParams
+    const opt = (k: string) => p.get(k) || undefined
+    return viaConvex('Failed to fetch shifts', c => c.query(api.shifts.list, { startDate: opt('startDate'), endDate: opt('endDate'), employeeId: opt('employeeId'), role: opt('role') }))
+  }
   try {
     await requireUser()
     const params = new URL(request.url).searchParams
@@ -26,6 +33,10 @@ export async function GET(request: Request) {
 
 /** Add a shift. Not allowed inside a locked pay period. */
 export async function POST(request: Request) {
+  if (usesConvex()) {
+    const body = await request.json()
+    return viaConvex('Failed to create shift', async c => c.mutation(api.shifts.create, parseShiftInput(body)))
+  }
   try {
     const actor = await requireNamedUser()
     const input = parseShiftInput(await request.json())

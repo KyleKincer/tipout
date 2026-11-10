@@ -22,6 +22,11 @@ export default clerkMiddleware(async (auth, req) => {
     return NextResponse.json({ error: 'Sign in first.' }, { status: 401 })
   }
 
+  // Write freeze for a database cutover: WRITES_FROZEN=1 rejects every change while reads keep working.
+  if (process.env.WRITES_FROZEN === '1' && isApiRoute(req) && !['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
+    return NextResponse.json({ error: 'Changes are paused for a few minutes while the database is moved. Try again shortly.' }, { status: 503 })
+  }
+
   // Redirect unauthenticated users to sign-in except for public routes
   if (!isAuthenticated && !isPublicRoute(req)) {
     const signInUrl = new URL('/sign-in', req.url);

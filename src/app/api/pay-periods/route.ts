@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server'
+import { usesConvex, viaConvex } from '@/lib/convexServer'
+import { api } from '@convex/_generated/api'
 import { prisma } from '@/lib/prisma'
 import { errorResponse, HttpError, requireAdmin, requireUser } from '@/lib/apiAuth'
 import { audit } from '@/lib/audit'
@@ -7,6 +9,7 @@ import { validatePayPeriod, type PayPeriodSnapshot } from '@/utils/payPeriods'
 import { addDays, toDateOnly } from '@/utils/roleVersions'
 
 export async function GET() {
+  if (usesConvex()) return viaConvex('Failed to fetch pay periods', c => c.query(api.payPeriods.list, {}))
   try {
     await requireUser()
     const rows = await prisma.payPeriod.findMany({ orderBy: { startDate: 'desc' } })
@@ -34,6 +37,10 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  if (usesConvex()) {
+    const { startDate, endDate } = await request.json()
+    return viaConvex('Failed to create pay period', c => c.mutation(api.payPeriods.create, { startDate: String(startDate ?? ''), endDate: String(endDate ?? '') }))
+  }
   try {
     const actor = await requireAdmin()
     const { startDate, endDate } = await request.json()

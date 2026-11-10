@@ -1,202 +1,70 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { errorResponse, HttpError, requireAdmin, requireUser } from '@/lib/apiAuth'
+import { audit } from '@/lib/audit'
+import { assertUnlocked, loadEngineShifts } from '@/lib/roleData'
+import { assertRoleUsable, parseShiftInput, shiftData, shiftRecord } from '@/lib/shiftWrites'
+import { toDateOnly } from '@/utils/roleVersions'
 
-// Define types for prisma role configuration
-type RoleConfig = {
-  id: string;
-  tipoutType: string;
-  percentageRate: unknown;
-  effectiveFrom: Date;
-  effectiveTo: Date | null;
-  receivesTipout?: boolean;
-  paysTipout?: boolean;
-  distributionGroup?: string | null;
-  [key: string]: unknown;
-};
+type Params = { params: Promise<{ id: string }> }
 
-export async function GET(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
+/** One shift, with the role settings in effect on its date. */
+export async function GET(_request: Request, { params }: Params) {
   try {
-    // First, get the shift
-    const shift = await prisma.shift.findUnique({
-      where: {
-        id: params.id,
-      },
-      include: {
-        employee: true,
-        role: true,
-      },
-    })
-
-    if (!shift) {
-      return NextResponse.json(
-        { error: 'Shift not found' },
-        { status: 404 }
-      )
-    }
-
-    // Get the shift date to find appropriate configs
-    const shiftDate = new Date(shift.date)
-
-    // Now get the role configs that were active on the shift date
-    const roleConfigs = await prisma.roleConfig.findMany({
-      where: {
-        roleId: shift.roleId,
-        OR: [
-          { effectiveTo: null },
-          {
-            AND: [
-              { effectiveFrom: { lte: shiftDate } },
-              {
-                OR: [
-                  { effectiveTo: { gte: shiftDate } },
-                  { effectiveTo: null }
-                ]
-              }
-            ]
-          }
-        ]
-      }
-    })
-
-    // Convert Decimal values to numbers for JSON serialization
-    const serializedShift = {
-      ...shift,
-      hours: Number(shift.hours),
-      cashTips: Number(shift.cashTips),
-      creditTips: Number(shift.creditTips),
-      liquorSales: Number(shift.liquorSales),
-      role: shift.role ? {
-        ...shift.role,
-        basePayRate: Number(shift.role.basePayRate),
-        configs: roleConfigs.map((config: RoleConfig) => ({
-          ...config,
-          percentageRate: Number(config.percentageRate)
-        }))
-      } : undefined
-    }
-
-    return NextResponse.json(serializedShift)
+    await requireUser()
+    const { id } = await params
+    const [shift] = await loadEngineShifts(prisma, { id })
+    if (!shift) throw new HttpError(404, 'Shift not found')
+    return NextResponse.json(shift)
   } catch (error) {
-    console.error('Error fetching shift:', error)
-    return NextResponse.json(
-      { error: 'Failed to fetch shift' },
-      { status: 500 }
-    )
+    return errorResponse(error, 'Failed to fetch shift')
   }
 }
 
-export async function PUT(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
+/** Change a shift. Neither its old nor its new date may be in a locked pay period. */
+export async function PUT(request: Request, { params }: Params) {
   try {
-    const body = await request.json()
-    const {
-      employeeId,
-      roleId,
-      date,
-      hours,
-      cashTips,
-      creditTips,
-      liquorSales,
-    } = body
-
-    // Validate required fields
-    if (!employeeId || !roleId || !date || hours === undefined) {
-      return NextResponse.json(
-        { error: 'Missing required fields' },
-        { status: 400 }
-      )
-    }
-
-    // Update shift without tipout calculations
-    const shift = await prisma.shift.update({
-      where: {
-        id: params.id,
-      },
-      data: {
-        employeeId,
-        roleId,
-        date: new Date(date),
-        hours: Number(hours),
-        cashTips: Number(cashTips || 0),
-        creditTips: Number(creditTips || 0),
-        liquorSales: Number(liquorSales || 0),
-      },
-      include: {
-        employee: true,
-        role: {
-          include: {
-            configs: {
-              where: {
-                OR: [
-                  { effectiveTo: null },
-                  {
-                    AND: [
-                      { effectiveFrom: { lte: new Date(date) } },
-                      {
-                        OR: [
-                          { effectiveTo: { gte: new Date(date) } },
-                          { effectiveTo: null }
-                        ]
-                      }
-                    ]
-                  }
-                ]
-              }
-            }
-          }
-        }
-      },
+    const actor = await requireAdmin()
+    const { id } = await params
+    const input = parseShiftInput(await request.json())
+    const updated = await prisma.$transaction(async tx => {
+      const before = await tx.shift.findUnique({ where: { id }, include: { employee: true, role: true } })
+      if (!before) throw new HttpError(404, 'Shift not found')
+      await assertUnlocked(tx, [toDateOnly(before.date), input.date], 'change shifts')
+      // An archived role may stay on a shift that already had it.
+      await assertRoleUsable(tx, input.roleId, input.date, input.roleId === before.roleId)
+      const after = await tx.shift.update({ where: { id }, data: shiftData(input) })
+      await audit(tx, actor, {
+        action: 'shift.update', entityType: 'shift', entityId: id,
+        summary: `Changed ${before.employee.name}'s ${before.role.name} shift on ${toDateOnly(before.date)}`,
+        before: shiftRecord(before), after: shiftRecord(after),
+      })
+      return after
     })
-
-    // Convert Decimal values to numbers for JSON serialization
-    const serializedShift = {
-      ...shift,
-      hours: Number(shift.hours),
-      cashTips: Number(shift.cashTips),
-      creditTips: Number(shift.creditTips),
-      liquorSales: Number(shift.liquorSales),
-      role: {
-        ...shift.role,
-        basePayRate: Number(shift.role.basePayRate),
-        configs: shift.role.configs.map(config => ({
-          ...config,
-          percentageRate: Number(config.percentageRate)
-        }))
-      }
-    }
-
-    return NextResponse.json(serializedShift)
+    return NextResponse.json(shiftRecord(updated))
   } catch (error) {
-    console.error('Error updating shift:', error)
-    return NextResponse.json(
-      { error: 'Failed to update shift' },
-      { status: 500 }
-    )
+    return errorResponse(error, 'Failed to update shift')
   }
 }
 
-export async function DELETE(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
+/** Delete a shift. Not allowed inside a locked pay period. */
+export async function DELETE(_request: Request, { params }: Params) {
   try {
-    await prisma.shift.delete({
-      where: {
-        id: params.id,
-      },
+    const actor = await requireAdmin()
+    const { id } = await params
+    await prisma.$transaction(async tx => {
+      const before = await tx.shift.findUnique({ where: { id }, include: { employee: true, role: true } })
+      if (!before) throw new HttpError(404, 'Shift not found')
+      await assertUnlocked(tx, [toDateOnly(before.date)], 'delete shifts')
+      await tx.shift.delete({ where: { id } })
+      await audit(tx, actor, {
+        action: 'shift.delete', entityType: 'shift', entityId: id,
+        summary: `Deleted ${before.employee.name}'s ${before.role.name} shift on ${toDateOnly(before.date)}`,
+        before: shiftRecord(before),
+      })
     })
-
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error('Error deleting shift:', error)
-    return NextResponse.json(
-      { error: 'Failed to delete shift' },
-      { status: 500 }
-    )
+    return errorResponse(error, 'Failed to delete shift')
   }
-} 
+}

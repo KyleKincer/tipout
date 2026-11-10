@@ -1,14 +1,13 @@
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
-import type { NextRequest } from "next/server";
-import { UserRole } from "./lib/roles";
 
-const isAdminRoute = createRouteMatcher(['/admin(.*)'])
-// Define public routes that don't require authentication
+const isAdminRoute = createRouteMatcher(['/admin(.*)', '/changes(.*)'])
+const isApiRoute = createRouteMatcher(['/api/(.*)'])
+// Define public routes that don't require authentication. API routes are not public: every one
+// needs a signed-in user, and the routes themselves check for admin where it matters.
 const isPublicRoute = createRouteMatcher([
   '/', // Landing page
   '/sign-in(.*)', // Sign-in pages
-  '/api/(.*)', // API routes
   '/verification(.*)', // For email verification links
   // Special invitation paths for Clerk - these will contain tokens for valid invitations only
   '/sign-up/invitation/(.*)', // For Clerk invitation links
@@ -18,16 +17,12 @@ export default clerkMiddleware(async (auth, req) => {
   const session = await auth();
   const isAuthenticated = !!session.userId;
   const metadata = session.sessionClaims?.metadata as { roles?: string[] } | undefined;
-  
-  // Log session data for debugging
-  console.log('Session metadata:', {
-    sessionClaims: session.sessionClaims,
-    metadata: metadata,
-    url: req.url,
-    isAuthenticated
-  });
-  
-  // First check: redirect unauthenticated users to sign-in except for public routes
+
+  if (!isAuthenticated && isApiRoute(req)) {
+    return NextResponse.json({ error: 'Sign in first.' }, { status: 401 })
+  }
+
+  // Redirect unauthenticated users to sign-in except for public routes
   if (!isAuthenticated && !isPublicRoute(req)) {
     const signInUrl = new URL('/sign-in', req.url);
     // Add the original URL as a redirect parameter
@@ -48,7 +43,8 @@ export default clerkMiddleware(async (auth, req) => {
     '/employees/:id/edit',
     '/employees/:id/delete',
     '/roles/:id/edit',
-    '/roles/:id/delete'
+    '/roles/:id/delete',
+    '/admin/(.*)',
   ])
 
   if (isAuthenticated && isProtectedOperation(req) && !metadata?.roles?.includes('admin')) {

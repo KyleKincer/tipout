@@ -4,7 +4,7 @@ import {
   ReportSummary,
   EmployeeRoleSummary,
   RoleConfig,
-} from '@/types/reports';
+} from '../types/reports';
 
 import { isWithinInterval, parseISO, isBefore, isEqual } from 'date-fns';
 

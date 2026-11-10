@@ -46,3 +46,6 @@ next-env.d.ts
 
 # script bundles
 /.tmp
+
+# local Convex backend data
+/.convex/

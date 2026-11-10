@@ -1,29 +1,20 @@
-import { NextResponse } from 'next/server';
-import { prisma as db } from '@/lib/prisma';
+import { NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma'
+import { errorResponse, requireUser } from '@/lib/apiAuth'
 
+/** Pool names and tipout-sharing group names used by any role, for the settings form's suggestions. */
 export async function GET() {
   try {
-    const configsWithGroups = await db.roleConfig.findMany({
-      where: {
-        tipPoolGroup: {
-          not: null, // Exclude null values
-          notIn: [''], // Exclude empty strings if necessary
-        },
-      },
-      select: {
-        tipPoolGroup: true,
-      },
-      distinct: ['tipPoolGroup'], // Get distinct values
-    });
-
-    // Extract the names and filter out any potential nulls again just in case
-    const groupNames = configsWithGroups
-      .map(config => config.tipPoolGroup)
-      .filter((group): group is string => group !== null && group !== ''); 
-
-    return NextResponse.json(groupNames);
+    await requireUser()
+    const [pools, groups] = await Promise.all([
+      prisma.roleVersion.findMany({ where: { tipPoolGroup: { not: null } }, select: { tipPoolGroup: true }, distinct: ['tipPoolGroup'] }),
+      prisma.roleVersionTipout.findMany({ where: { distributionGroup: { not: null } }, select: { distributionGroup: true }, distinct: ['distributionGroup'] }),
+    ])
+    return NextResponse.json({
+      pools: pools.map(p => p.tipPoolGroup!).filter(Boolean).sort(),
+      distributionGroups: groups.map(g => g.distributionGroup!).filter(Boolean).sort(),
+    })
   } catch (error) {
-    console.error("Error fetching tip pool groups:", error);
-    return NextResponse.json({ message: 'Error fetching tip pool groups' }, { status: 500 });
+    return errorResponse(error, 'Error fetching tip pool groups')
   }
-} 
+}

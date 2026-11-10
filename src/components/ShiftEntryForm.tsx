@@ -20,6 +20,7 @@ type RoleConfiguration = {
 type Role = {
   id: string
   name: string
+  active?: boolean
   configs: RoleConfiguration[]
 }
 
@@ -44,6 +45,7 @@ export default function ShiftEntryForm({ initialData, onSubmit }: ShiftEntryForm
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedRole, setSelectedRole] = useState<Role | null>(null)
+  const [submitError, setSubmitError] = useState<string | null>(null)
 
   const {
     register,
@@ -118,6 +120,7 @@ export default function ShiftEntryForm({ initialData, onSubmit }: ShiftEntryForm
 
   const handleFormSubmit = async (data: ShiftFormData) => {
     setIsSubmitting(true)
+    setSubmitError(null)
     try {
       if (onSubmit) {
         await onSubmit(data)
@@ -131,7 +134,7 @@ export default function ShiftEntryForm({ initialData, onSubmit }: ShiftEntryForm
         })
 
         if (!response.ok) {
-          throw new Error('Failed to save shift')
+          throw new Error((await response.json().catch(() => ({}))).error || 'Failed to save shift')
         }
 
         const result = await response.json()
@@ -140,7 +143,7 @@ export default function ShiftEntryForm({ initialData, onSubmit }: ShiftEntryForm
       }
     } catch (error) {
       console.error('Error submitting shift:', error)
-      setError('Failed to save shift')
+      setSubmitError(error instanceof Error ? error.message : 'Failed to save shift')
     } finally {
       setIsSubmitting(false)
     }
@@ -200,6 +203,9 @@ export default function ShiftEntryForm({ initialData, onSubmit }: ShiftEntryForm
 
   return (
     <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-6">
+      {submitError && (
+        <div role="alert" className="rounded-md bg-red-50 p-3 text-sm text-red-800 dark:bg-red-900/50 dark:text-red-200">{submitError}</div>
+      )}
       <div className="bg-white/50 dark:bg-gray-800/50 shadow sm:rounded-lg border border-gray-200 dark:border-gray-700 transition-all hover:shadow-md">
         <div className="px-4 py-5 sm:p-6">
           {/* Employee & Role Section */}
@@ -240,7 +246,7 @@ export default function ShiftEntryForm({ initialData, onSubmit }: ShiftEntryForm
                     className="block w-full rounded-md border-gray-300 shadow-sm px-3 py-2 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white"
                   >
                     <option value="">select role...</option>
-                    {roles.map((role) => (
+                    {roles.filter(role => role.active !== false || role.id === initialData?.roleId).map((role) => (
                       <option key={role.id} value={role.id}>
                         {role.name}
                       </option>

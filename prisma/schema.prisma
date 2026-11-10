@@ -26,14 +26,19 @@ model Employee {
 }
 
 model Role {
-  id          String       @id @default(cuid())
+  id          String        @id @default(cuid())
   name        String
-  basePayRate Decimal      @default(0)
-  defaultFor  Employee[]   @relation("DefaultRole")
+  /// Archived roles keep their history but can't be picked for new shifts.
+  active      Boolean       @default(true)
+  /// Legacy: pay rate now lives on RoleVersion. Kept so the pre-versioning app can still run.
+  basePayRate Decimal       @default(0)
+  defaultFor  Employee[]    @relation("DefaultRole")
   shifts      Shift[]
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  /// Legacy: tipout settings now live on RoleVersion. Kept so the pre-versioning app can still run.
   configs     RoleConfig[]
+  versions    RoleVersion[]
 
   @@index([name])
 }
@@ -57,6 +62,7 @@ model Shift {
   @@index([roleId])
 }
 
+/// Legacy settings table, replaced by RoleVersion. Read only by the one-time backfill.
 model RoleConfig {
   id                String    @id @default(uuid())
   roleId            String
@@ -68,10 +74,79 @@ model RoleConfig {
   paysTipout        Boolean   @default(true)
   distributionGroup String?
   tipPoolGroup      String?
+  basePayRate       Decimal?
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
   role              Role      @relation(fields: [roleId], references: [id], onDelete: Cascade)
 
   @@unique([roleId, tipoutType, effectiveFrom])
   @@index([roleId])
+}
+
+/// Everything about how a role is paid, for one stretch of dates.
+/// A role's versions never overlap: effectiveFrom is the first day, effectiveTo is the first day
+/// after (exclusive), and the latest version is open-ended. Past versions are never edited.
+model RoleVersion {
+  id            String              @id @default(cuid())
+  roleId        String
+  role          Role                @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  effectiveFrom DateTime            @db.Date
+  effectiveTo   DateTime?           @db.Date
+  basePayRate   Decimal             @default(0)
+  /// Roles with the same pool name on the same night share their tips by hours. Null means no pool.
+  tipPoolGroup  String?
+  note          String?
+  createdAt     DateTime            @default(now())
+  createdBy     String?
+  tipouts       RoleVersionTipout[]
+
+  @@unique([roleId, effectiveFrom])
+  @@index([roleId])
+}
+
+model RoleVersionTipout {
+  id                String      @id @default(cuid())
+  versionId         String
+  version           RoleVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  tipoutType        String
+  percentageRate    Decimal     @default(0)
+  paysTipout        Boolean     @default(false)
+  receivesTipout    Boolean     @default(false)
+  distributionGroup String?
+
+  @@unique([versionId, tipoutType])
+}
+
+/// A stretch of dates payroll was run for. Locking saves the results exactly as paid and blocks
+/// changes to shifts and role settings that would alter them.
+model PayPeriod {
+  id        String    @id @default(cuid())
+  startDate DateTime  @db.Date
+  /// Last day of the period (inclusive).
+  endDate   DateTime  @db.Date
+  lockedAt  DateTime?
+  lockedBy  String?
+  /// Results as paid, saved at lock time.
+  snapshot  Json?
+  createdAt DateTime  @default(now())
+  createdBy String?
+
+  @@unique([startDate])
+}
+
+/// Who changed what, and when. Written alongside every change to shifts, employees, roles and pay periods.
+model AuditLog {
+  id         String   @id @default(cuid())
+  at         DateTime @default(now())
+  actorId    String?
+  actorName  String?
+  action     String
+  entityType String
+  entityId   String?
+  summary    String
+  before     Json?
+  after      Json?
+
+  @@index([at])
+  @@index([entityType, entityId])
 }

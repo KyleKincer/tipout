@@ -6,6 +6,8 @@ import Link from 'next/link'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import { AdminOnly } from '@/components/RoleBasedUI'
+import ReportRules, { type ReportRulesData } from '@/components/ReportRules'
+import { LockClosedIcon } from '@heroicons/react/24/outline'
 import type { ShiftReportResult } from '@/utils/reportCalculations'
 import { filterShiftReportResults, payrollTipsBreakdown } from '@/utils/shiftReportRows'
 
@@ -19,7 +21,8 @@ function ShiftsContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const pathname = usePathname()
-  const [shifts, setShifts] = useState<ShiftReportResult[]>([])
+  const [shifts, setShifts] = useState<(ShiftReportResult & { lockedPeriodId?: string })[]>([])
+  const [reportMeta, setReportMeta] = useState<ReportRulesData>({})
   const [isLoading, setIsLoading] = useState(true)
   const [isFilterLoading, setIsFilterLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -74,7 +77,10 @@ function ShiftsContent() {
       if (!response.ok) throw new Error('Failed to fetch shift report')
       const data = await response.json()
       if (!Array.isArray(data.shiftResults)) throw new Error('Shift report results are unavailable')
-      if (!signal?.aborted) setShifts(data.shiftResults)
+      if (!signal?.aborted) {
+        setShifts(data.shiftResults)
+        setReportMeta({ rules: data.rules, lockedPeriods: data.lockedPeriods, drift: data.drift })
+      }
     } catch (err) {
       if (!signal?.aborted) {
         setError('Failed to load shifts')
@@ -105,14 +111,14 @@ function ShiftsContent() {
       })
 
       if (!response.ok) {
-        throw new Error('Failed to delete shift')
+        throw new Error((await response.json().catch(() => ({}))).error || 'Failed to delete shift')
       }
 
       // Refresh the shifts list
       fetchShifts()
     } catch (err) {
       console.error('Error deleting shift:', err)
-      alert('Failed to delete shift')
+      alert(err instanceof Error ? err.message : 'Failed to delete shift')
     }
   }
 
@@ -307,6 +313,8 @@ function ShiftsContent() {
           </div>
         </div>
       ) : (
+        <>
+        <ReportRules data={reportMeta} startDate={filters.startDate} endDate={isDateRange ? filters.endDate : filters.startDate} />
         <div className="mt-8 bg-white/50 dark:bg-gray-800/50 shadow sm:rounded-lg border border-gray-200 dark:border-gray-700">
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-300 dark:divide-gray-700">
@@ -440,18 +448,26 @@ function ShiftsContent() {
                       </td>
                       <AdminOnly>
                         <td className="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
-                          <Link
-                            href={`/shifts/${shift.id}/edit`}
-                            className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300 mr-4"
-                          >
-                            edit
-                          </Link>
-                          <button
-                            onClick={() => handleDelete(shift.id)}
-                            className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
-                          >
-                            delete
-                          </button>
+                          {shift.lockedPeriodId ? (
+                            <span className="inline-flex items-center gap-1 text-gray-500 dark:text-gray-400" title="This pay period is locked. Unlock it on the pay periods page to make changes.">
+                              <LockClosedIcon className="h-4 w-4" /> locked
+                            </span>
+                          ) : (
+                            <>
+                              <Link
+                                href={`/shifts/${shift.id}/edit`}
+                                className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300 mr-4"
+                              >
+                                edit
+                              </Link>
+                              <button
+                                onClick={() => handleDelete(shift.id)}
+                                className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
+                              >
+                                delete
+                              </button>
+                            </>
+                          )}
                         </td>
                       </AdminOnly>
                     </tr>
@@ -461,6 +477,7 @@ function ShiftsContent() {
             </table>
           </div>
         </div>
+        </>
       )}
     </div>
   )

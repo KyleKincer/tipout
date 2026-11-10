@@ -1,203 +1,49 @@
 import { NextResponse } from 'next/server'
+import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
+import { errorResponse, HttpError, requireNamedUser, requireUser } from '@/lib/apiAuth'
+import { audit } from '@/lib/audit'
+import { assertUnlocked, loadEngineShifts, shiftDateRange } from '@/lib/roleData'
+import { assertRoleUsable, parseShiftInput, shiftData, shiftRecord } from '@/lib/shiftWrites'
+import { isDateOnly } from '@/utils/roleVersions'
 
-// Helper function to ensure consistent date handling
-function parseDate(dateString: string): Date {
-  // Create date in UTC to match database storage
-  const date = new Date(dateString + 'T00:00:00.000Z')
-  return date
-}
-
-// Helper function to get the end of a day
-function getEndOfDay(dateString: string): Date {
-  // Create date in UTC to match database storage
-  const date = new Date(dateString + 'T23:59:59.999Z')
-  return date
-}
-
+/** Shifts, each with the role settings in effect on its own date. */
 export async function GET(request: Request) {
   try {
-    const { searchParams } = new URL(request.url)
-    const startDate = searchParams.get('startDate')
-    const endDate = searchParams.get('endDate')
-    const employeeId = searchParams.get('employeeId')
-    const role = searchParams.get('role')
-
-    // Modified where clause for date handling
-    let where: any = {}
-    
-    if (employeeId) {
-      where.employeeId = employeeId
-    }
-    
-    if (role) {
-      where.role = {
-        name: role
-      }
-    }
-    
-    if (startDate && endDate) {
-      if (startDate === endDate) {
-        // If startDate and endDate are the same, use a date range for that single day
-        where.date = {
-          gte: parseDate(startDate),
-          lte: getEndOfDay(startDate), 
-        }
-      } else {
-        // Normal date range
-        where.date = {
-          gte: parseDate(startDate),
-          lte: getEndOfDay(endDate), // Changed from lt to lte with getEndOfDay
-        }
-      }
-    } else if (startDate) {
-      where.date = {
-        gte: parseDate(startDate),
-        lte: getEndOfDay(startDate), // For a single date, include all hours in that day
-      }
-    }
-
-    const shifts = await prisma.shift.findMany({
-      where,
-      include: {
-        employee: true,
-        role: {
-          include: {
-            configs: {
-              where: {
-                OR: [
-                  { effectiveTo: null },
-                  {
-                    AND: [
-                      { effectiveFrom: { lte: getEndOfDay(endDate || startDate || new Date().toISOString().split('T')[0]) } },
-                      {
-                        OR: [
-                          { effectiveTo: { gte: parseDate(startDate || new Date().toISOString().split('T')[0]) } },
-                          { effectiveTo: null }
-                        ]
-                      }
-                    ]
-                  }
-                ]
-              }
-            }
-          }
-        }
-      },
-      orderBy: {
-        date: 'desc',
-      },
-    })
-
-    // Convert Decimal values to numbers for JSON serialization
-    const serializedShifts = shifts.map(shift => ({
-      ...shift,
-      hours: Number(shift.hours),
-      cashTips: Number(shift.cashTips),
-      creditTips: Number(shift.creditTips),
-      liquorSales: Number(shift.liquorSales),
-      role: {
-        ...shift.role,
-        basePayRate: Number(shift.role.basePayRate),
-        configs: shift.role.configs.map(config => ({
-          ...config,
-          percentageRate: Number(config.percentageRate)
-        }))
-      }
-    }))
-
-    return NextResponse.json(serializedShifts)
+    await requireUser()
+    const params = new URL(request.url).searchParams
+    const startDate = params.get('startDate')
+    const endDate = params.get('endDate') || startDate
+    const where: Prisma.ShiftWhereInput = {}
+    if (params.get('employeeId')) where.employeeId = params.get('employeeId')!
+    if (params.get('role')) where.role = { name: params.get('role')! }
+    if (isDateOnly(startDate) && isDateOnly(endDate)) Object.assign(where, shiftDateRange(startDate, endDate))
+    return NextResponse.json(await loadEngineShifts(prisma, where, { date: 'desc' }))
   } catch (error) {
-    console.error('Error fetching shifts:', error)
-    return NextResponse.json(
-      { error: 'Failed to fetch shifts' },
-      { status: 500 }
-    )
+    return errorResponse(error, 'Failed to fetch shifts')
   }
 }
 
+/** Add a shift. Not allowed inside a locked pay period. */
 export async function POST(request: Request) {
   try {
-    const body = await request.json()
-    const {
-      employeeId,
-      roleId,
-      date,
-      hours,
-      cashTips,
-      creditTips,
-      liquorSales,
-    } = body
-
-    // Validate required fields
-    if (!employeeId || !roleId || !date || hours === undefined) {
-      return NextResponse.json(
-        { error: 'Missing required fields' },
-        { status: 400 }
-      )
-    }
-
-    // Create shift without tipout calculations
-    const shift = await prisma.shift.create({
-      data: {
-        employeeId,
-        roleId,
-        date: parseDate(date),
-        hours: Number(hours),
-        cashTips: Number(cashTips || 0),
-        creditTips: Number(creditTips || 0),
-        liquorSales: Number(liquorSales || 0),
-      },
-      include: {
-        employee: true,
-        role: {
-          include: {
-            configs: {
-              where: {
-                OR: [
-                  { effectiveTo: null },
-                  {
-                    AND: [
-                      { effectiveFrom: { lte: getEndOfDay(date) } },
-                      {
-                        OR: [
-                          { effectiveTo: { gte: parseDate(date) } },
-                          { effectiveTo: null }
-                        ]
-                      }
-                    ]
-                  }
-                ]
-              }
-            }
-          }
-        }
-      },
+    const actor = await requireNamedUser()
+    const input = parseShiftInput(await request.json())
+    const shift = await prisma.$transaction(async tx => {
+      await assertUnlocked(tx, [input.date], 'add shifts')
+      const role = await assertRoleUsable(tx, input.roleId, input.date)
+      const employee = await tx.employee.findUnique({ where: { id: input.employeeId } })
+      if (!employee) throw new HttpError(400, 'That employee no longer exists.')
+      const created = await tx.shift.create({ data: shiftData(input) })
+      await audit(tx, actor, {
+        action: 'shift.create', entityType: 'shift', entityId: created.id,
+        summary: `Added ${employee.name}'s ${role.name} shift on ${input.date} (${input.hours}h)`,
+        after: shiftRecord(created),
+      })
+      return created
     })
-
-    // Convert Decimal values to numbers for JSON serialization
-    const serializedShift = {
-      ...shift,
-      hours: Number(shift.hours),
-      cashTips: Number(shift.cashTips),
-      creditTips: Number(shift.creditTips),
-      liquorSales: Number(shift.liquorSales),
-      role: {
-        ...shift.role,
-        basePayRate: Number(shift.role.basePayRate),
-        configs: shift.role.configs.map(config => ({
-          ...config,
-          percentageRate: Number(config.percentageRate)
-        }))
-      }
-    }
-
-    return NextResponse.json(serializedShift)
+    return NextResponse.json(shiftRecord(shift))
   } catch (error) {
-    console.error('Error creating shift:', error)
-    return NextResponse.json(
-      { error: 'Failed to create shift' },
-      { status: 500 }
-    )
+    return errorResponse(error, 'Failed to create shift')
   }
-} 
+}

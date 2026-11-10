@@ -1,93 +1,71 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { errorResponse, HttpError, requireAdmin, requireUser } from '@/lib/apiAuth'
+import { audit } from '@/lib/audit'
+import { dbDate, earliestChangeDate, loadVersions } from '@/lib/roleData'
+import { versionData } from '@/lib/roleWrites'
+import { describeSettings, isDateOnly, normalizeSettings, parseSettings, todayInRestaurant, validateSettings, versionOn } from '@/utils/roleVersions'
 
-export async function GET() {
+/**
+ * Roles with the settings in effect on a date (today unless ?date=YYYY-MM-DD).
+ * `configs` keeps the shape the shift forms already read.
+ */
+export async function GET(request: Request) {
   try {
-    const roles = await prisma.role.findMany({
-      orderBy: {
-        name: 'asc',
-      },
-      select: {
-        id: true,
-        name: true,
-        basePayRate: true,
-        configs: {
-          where: {
-            effectiveTo: null,
-          },
-          select: {
-            id: true,
-            tipoutType: true,
-            percentageRate: true,
-            effectiveFrom: true,
-            effectiveTo: true,
-            paysTipout: true,
-          },
-        },
-      },
-    })
-
-    // Convert Decimal to number for JSON serialization
-    const serializedRoles = roles.map(role => ({
-      ...role,
-      basePayRate: Number(role.basePayRate),
-      configs: role.configs.map(config => ({
-        ...config,
-        percentageRate: Number(config.percentageRate),
-      })),
+    await requireUser()
+    const param = new URL(request.url).searchParams.get('date')
+    const day = isDateOnly(param) ? param : todayInRestaurant()
+    const roles = await prisma.role.findMany({ orderBy: { name: 'asc' } })
+    const versions = await loadVersions(prisma)
+    return NextResponse.json(roles.map(role => {
+      const all = versions.get(role.id) ?? []
+      const v = versionOn(all, day)
+      const upcoming = all.find(x => x.effectiveFrom > day)
+      return {
+        id: role.id,
+        name: role.name,
+        active: role.active,
+        asOf: day,
+        basePayRate: v?.basePayRate ?? 0,
+        tipPoolGroup: v?.tipPoolGroup ?? null,
+        settingsFrom: v?.effectiveFrom ?? null,
+        summary: v ? describeSettings(v) : 'no settings for this date',
+        upcomingChange: upcoming ? { effectiveFrom: upcoming.effectiveFrom, summary: describeSettings(upcoming) } : null,
+        configs: (v?.tipouts ?? []).map(t => ({ ...t, effectiveFrom: v!.effectiveFrom, effectiveTo: v!.effectiveTo })),
+      }
     }))
-
-    return NextResponse.json(serializedRoles)
   } catch (error) {
-    console.error('Error fetching roles:', error)
-    return NextResponse.json(
-      { error: 'Failed to fetch roles' },
-      { status: 500 }
-    )
+    return errorResponse(error, 'Failed to fetch roles')
   }
 }
 
+/** Create a role with its first settings, starting on a date. */
 export async function POST(request: Request) {
   try {
+    const actor = await requireAdmin()
     const body = await request.json()
-    const { name, basePayRate } = body
-
-    if (!name || basePayRate === undefined) {
-      return NextResponse.json(
-        { error: 'Name and base pay rate are required' },
-        { status: 400 }
-      )
-    }
-
-    const role = await prisma.role.create({
-      data: {
-        name,
-        basePayRate: parseFloat(basePayRate),
-      },
-      select: {
-        id: true,
-        name: true,
-        basePayRate: true,
-        configs: true,
-      },
-    })
-
-    // Convert Decimal to number for JSON serialization
-    const serializedRole = {
-      ...role,
-      basePayRate: Number(role.basePayRate),
-      configs: role.configs.map(config => ({
-        ...config,
-        percentageRate: Number(config.percentageRate),
-      })),
-    }
-
-    return NextResponse.json(serializedRole)
+    const name = typeof body.name === 'string' ? body.name.trim() : ''
+    const effectiveFrom = body.effectiveFrom
+    const settings = parseSettings(body.settings)
+    if (!name) throw new HttpError(400, 'Give the role a name.')
+    if (!isDateOnly(effectiveFrom)) throw new HttpError(400, 'Pick the date these settings start.')
+    const problems = validateSettings(settings)
+    if (problems.length) throw new HttpError(400, problems.join(' '))
+    const role = await prisma.$transaction(async tx => {
+      const earliest = await earliestChangeDate(tx)
+      if (earliest && effectiveFrom < earliest) throw new HttpError(409, `Payroll is locked before ${earliest}. Start this role on ${earliest} or later.`)
+      const created = await tx.role.create({ data: { name } })
+      const normalized = normalizeSettings(settings)
+      await tx.roleVersion.create({ data: { roleId: created.id, effectiveFrom: dbDate(effectiveFrom), ...versionData(normalized, actor, body.note) } })
+      await audit(tx, actor, {
+        action: 'role.create', entityType: 'role', entityId: created.id,
+        summary: `Created role ${name} from ${effectiveFrom}: ${describeSettings(normalized)}`,
+        after: { name, effectiveFrom, settings: normalized },
+      })
+      return created
+    }, { isolationLevel: 'Serializable' })
+    return NextResponse.json({ id: role.id, name: role.name })
   } catch (error) {
-    console.error('Error creating role:', error)
-    return NextResponse.json(
-      { error: 'Failed to create role' },
-      { status: 500 }
-    )
+    return errorResponse(error, 'Failed to create role')
   }
-} 
+}

@@ -1,6 +1,9 @@
 import Link from 'next/link'
 import { prisma } from '@/lib/prisma'
 import { buildExampleNight, summarizeRoleRates, type RateRole } from '@/utils/howTipsWork'
+import { loadVersions } from '@/lib/roleData'
+import { formatDay } from '@/utils/dateLabels'
+import { isDateOnly, todayInRestaurant, toEngineRole, versionOn, type DateOnly } from '@/utils/roleVersions'
 import type { TipoutType } from '@/types/reports'
 
 // Rates come straight from role settings, so always render with the current values.
@@ -11,23 +14,14 @@ const TYPE_BASE: Record<TipoutType, string> = { bar: 'of liquor sales', host: 'o
 const money = (n: number) => `${n < 0 ? '−' : ''}$${Math.abs(n).toFixed(2)}`
 const pct = (n: number) => `${Number(n.toFixed(2))}%`
 
-async function loadRoles(): Promise<RateRole[]> {
-  const roles = await prisma.role.findMany({ orderBy: { name: 'asc' }, include: { configs: true } })
-  return roles.map(role => ({
-    name: role.name,
-    basePayRate: Number(role.basePayRate),
-    configs: role.configs.map(c => ({
-      id: c.id,
-      tipoutType: c.tipoutType as TipoutType,
-      percentageRate: Number(c.percentageRate),
-      effectiveFrom: c.effectiveFrom.toISOString(),
-      effectiveTo: c.effectiveTo ? c.effectiveTo.toISOString() : null,
-      receivesTipout: c.receivesTipout ?? false,
-      paysTipout: c.paysTipout ?? true,
-      distributionGroup: c.distributionGroup ?? undefined,
-      tipPoolGroup: c.tipPoolGroup ?? undefined,
-    })),
-  }))
+/** Each role's settings on the given day, from its dated settings history. */
+async function loadRoles(day: DateOnly): Promise<RateRole[]> {
+  const roles = await prisma.role.findMany({ where: { active: true }, orderBy: { name: 'asc' } })
+  const versions = await loadVersions(prisma)
+  return roles.map(role => {
+    const engine = toEngineRole(role.name, versionOn(versions.get(role.id) ?? [], day), day)
+    return { name: role.name, basePayRate: engine.basePayRate, configs: engine.configs, tipPoolGroup: engine.tipPoolGroup }
+  })
 }
 
 const card = 'bg-white/50 dark:bg-gray-800/50 shadow sm:rounded-lg border border-gray-200 dark:border-gray-700 px-4 py-5 sm:p-6'
@@ -51,9 +45,12 @@ function Step({ n, title, children }: { n: number; title: string; children: Reac
   )
 }
 
-export default async function HowTipsWorkPage() {
-  const roles = await loadRoles()
-  const today = new Date()
+export default async function HowTipsWorkPage({ searchParams }: { searchParams: Promise<{ date?: string }> }) {
+  const { date } = await searchParams
+  const todayDay = todayInRestaurant()
+  const day = isDateOnly(date) ? date : todayDay
+  const roles = await loadRoles(day)
+  const today = new Date(`${day}T12:00:00.000Z`)
   const rates = summarizeRoleRates(roles, today)
   const example = buildExampleNight(roles, today)
 
@@ -110,7 +107,7 @@ export default async function HowTipsWorkPage() {
 
       <div className="mt-4 grid gap-4 md:grid-cols-2">
         <section className={card}>
-          <h2 className={h2}>current rates</h2>
+          <h2 className={h2}>{day === todayDay ? 'current rates' : `rates on ${formatDay(day)}`}</h2>
           <table className="w-full">
             <thead className="border-b border-gray-200 dark:border-gray-700">
               <tr><th className={th}>role</th><th className={th}>pays</th><th className={th}>pools with</th></tr>
@@ -137,7 +134,8 @@ export default async function HowTipsWorkPage() {
             </tbody>
           </table>
           <p className={`mt-3 text-xs ${muted}`}>
-            Read live from <Link href="/roles" className="underline">roles</Link>. If a rate changes there, it changes here.
+            Read from each role&apos;s settings for {day === todayDay ? 'today' : formatDay(day)}. Rates change on set dates, and every shift uses the rates for its own date.{' '}
+            {day === todayDay ? <>Add <code>?date=YYYY-MM-DD</code> to the address to see an earlier date.</> : <Link href="/how-tips-work" className="underline">Show today</Link>}
           </p>
         </section>
 
@@ -162,7 +160,7 @@ export default async function HowTipsWorkPage() {
         <section className={`mt-4 ${card}`}>
           <h2 className={h2}>example night</h2>
           <p className={`mb-3 ${muted}`}>
-            Two {example.serverRole}s, one bartender and one host, using today&apos;s rates. No server assistant, so no
+            Two {example.serverRole}s, one bartender and one host, using {day === todayDay ? 'today’s' : `${formatDay(day)}’s`} rates. No server assistant, so no
             SA tipout.
           </p>
           <table className="w-full">

@@ -143,13 +143,16 @@ describe('report-aligned shift rows', () => {
     expect(oldFirst.shiftResults[1].paidBarTipout).toBe(10)
   })
 
-  it('does not introduce row wage totals when legacy role-name aggregation is ambiguous', () => {
+  it('sums base pay shift by shift when the rate changes within a summary', () => {
     const result = calculateDailyReport([
       shift('low', 'same', 'server', { creditTips: 5, role: { name: 'server', basePayRate: 10, configs: [] } }),
       shift('high', 'same', 'server', { creditTips: 7, role: { name: 'server', basePayRate: 20, configs: [] } }),
     ])
-    // Keep existing Reports behavior, but expose only exact per-shift TIP allocations.
-    expect(result.employeeSummaries[0].payrollTotal).toBe(52)
+    // 1h at $10 + 1h at $20 + $12 tips. (Before dated settings this used the last rate for every hour: $52.)
+    expect(result.employeeSummaries[0].totalBasePay).toBe(30)
+    expect(result.employeeSummaries[0].basePayRate).toBe(15)
+    expect(result.employeeSummaries[0].payrollTotal).toBe(42)
+    expect(result.shiftResults.map(s => s.basePayRate)).toEqual([10, 20])
     expect(result.shiftResults.map(s => s.payrollTips)).toEqual([5, 7])
     for (const row of result.shiftResults) {
       expect(row).not.toHaveProperty('payrollTotal')

@@ -5,6 +5,7 @@ import { format } from 'date-fns'
 import Link from 'next/link'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import LoadingSpinner from '@/components/LoadingSpinner'
+import ReportRules, { type ReportRulesData } from '@/components/ReportRules'
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -30,7 +31,7 @@ type ReportData = {
         hostTipout: number;
         sa: number;
     }>;
-}
+} & ReportRulesData
 
 // Register Chart.js components
 ChartJS.register(
@@ -981,6 +982,7 @@ function ReportsContent() {
         </div>
       ) : (
         <>
+          <ReportRules data={reportData} startDate={filters.startDate} endDate={filters.endDate} />
           <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <div className="bg-white/50 dark:bg-gray-800/50 overflow-hidden shadow rounded-lg border border-gray-200 dark:border-gray-700 transition-all hover:shadow-md">
               <div className="p-4 sm:p-5">

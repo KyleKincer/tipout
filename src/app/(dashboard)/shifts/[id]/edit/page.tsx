@@ -119,13 +119,14 @@ export default function EditShiftPage({ params }: { params: Promise<{ id: string
       })
 
       if (!response.ok) {
-        throw new Error('Failed to update shift')
+        // Shown by the form, which stays on screen so nothing typed is lost.
+        throw new Error((await response.json().catch(() => ({}))).error || 'Failed to update shift')
       }
 
       router.push('/shifts')
     } catch (err) {
       console.error('Error updating shift:', err)
-      setError('Failed to update shift')
+      throw err
     }
   }
 

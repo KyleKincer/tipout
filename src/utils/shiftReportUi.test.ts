@@ -39,6 +39,7 @@ function renderPage(employeeId = '') {
     'next/link': { __esModule: true, default: ({ children, ...props }: React.ComponentProps<'a'>) => React.createElement('a', props, children) },
     '@/components/LoadingSpinner': { __esModule: true, default: () => null },
     '@/components/RoleBasedUI': { AdminOnly: () => null },
+    '@/components/ReportRules': { __esModule: true, default: () => null },
     '@/utils/shiftReportRows': { filterShiftReportResults, payrollTipsBreakdown },
   }
   const localRequire = (id: string) => id in modules ? modules[id] : jest.requireActual(id)

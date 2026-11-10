@@ -2,7 +2,7 @@ import { parseISO, isAfter, isBefore } from 'date-fns'
 import { calculateDailyReport } from './reportCalculations'
 import type { RoleConfig, Shift, TipoutType } from '@/types/reports'
 
-export type RateRole = { name: string; basePayRate?: number; configs: RoleConfig[] }
+export type RateRole = { name: string; basePayRate?: number; configs: RoleConfig[]; tipPoolGroup?: string | null }
 
 export type RoleRateSummary = {
   name: string
@@ -26,6 +26,7 @@ function activeConfigsByType(role: RateRole, date: Date) {
 
 /** Payroll puts a role in a pool if any date-active config names a pool group. */
 function activePoolGroup(role: RateRole, date: Date) {
+  if (role.tipPoolGroup !== undefined) return role.tipPoolGroup || null
   return role.configs.find(c => c.tipPoolGroup && isActiveOn(c, date))?.tipPoolGroup ?? null
 }
 
@@ -90,7 +91,7 @@ export function buildExampleNight(roles: RateRole[], date: Date): ExampleNight |
     const role = roleByName.get(roleName)!
     return {
       id, date: day, employee: { id, name: id }, hours, cashTips: 0, creditTips, liquorSales,
-      role: { name: role.name, basePayRate: role.basePayRate ?? 0, configs: role.configs },
+      role: { name: role.name, basePayRate: role.basePayRate ?? 0, configs: role.configs, ...(role.tipPoolGroup !== undefined ? { tipPoolGroup: role.tipPoolGroup } : {}) },
     }
   }
   const inputs = [

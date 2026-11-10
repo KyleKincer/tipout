@@ -1,6 +1,5 @@
 'use client'
 
-import { Fragment } from 'react'
 import { Disclosure } from '@headlessui/react'
 import { Bars3Icon, XMarkIcon } from '@heroicons/react/24/outline'
 import Link from 'next/link'
@@ -15,7 +14,13 @@ const navigation = [
   { name: 'employees', href: '/employees' },
   { name: 'roles', href: '/roles' },
   { name: 'reports', href: '/reports' },
+  { name: 'pay periods', href: '/pay-periods' },
   { name: 'how tips work', href: '/how-tips-work' },
+]
+
+const adminNavigation = [
+  { name: 'change log', href: '/changes' },
+  { name: 'admin', href: '/admin' },
 ]
 
 function classNames(...classes: string[]) {
@@ -39,7 +44,7 @@ export default function Header() {
                   </Link>
                 </div>
                 {isSignedIn && (
-                  <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
+                  <div className="hidden lg:ml-6 lg:flex lg:space-x-6">
                     {navigation.map((item) => (
                       <Link
                         key={item.name}
@@ -55,19 +60,22 @@ export default function Header() {
                       </Link>
                     ))}
                     
-                    {/* Admin link - only shown to admin users */}
+                    {/* Admin links - only shown to admin users */}
                     <AdminOnly>
-                      <Link
-                        href="/admin"
-                        className={classNames(
-                          pathname.startsWith('/admin')
-                            ? 'border-indigo-500 text-[var(--foreground)]'
-                            : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300',
-                          'inline-flex items-center border-b-2 px-1 pt-1 text-sm font-medium'
-                        )}
-                      >
-                        admin
-                      </Link>
+                      {adminNavigation.map((item) => (
+                        <Link
+                          key={item.name}
+                          href={item.href}
+                          className={classNames(
+                            pathname.startsWith(item.href)
+                              ? 'border-indigo-500 text-[var(--foreground)]'
+                              : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300',
+                            'inline-flex items-center border-b-2 px-1 pt-1 text-sm font-medium'
+                          )}
+                        >
+                          {item.name}
+                        </Link>
+                      ))}
                     </AdminOnly>
                   </div>
                 )}
@@ -83,7 +91,7 @@ export default function Header() {
                     Sign in
                   </Link>
                 )}
-                <div className="-mr-2 flex items-center sm:hidden">
+                <div className="-mr-2 flex items-center lg:hidden">
                   <Disclosure.Button className="inline-flex items-center justify-center rounded-md p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-500 dark:hover:bg-gray-800 dark:hover:text-gray-300 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-indigo-500">
                     <span className="sr-only">Open main menu</span>
                     {open ? (
@@ -97,7 +105,7 @@ export default function Header() {
             </div>
           </div>
 
-          <Disclosure.Panel className="sm:hidden">
+          <Disclosure.Panel className="lg:hidden">
             <div className="space-y-1 pb-3 pt-2">
               {isSignedIn && navigation.map((item) => (
                 <Disclosure.Button
@@ -115,21 +123,24 @@ export default function Header() {
                 </Disclosure.Button>
               ))}
               
-              {/* Admin link in mobile menu - only shown to admin users */}
+              {/* Admin links in mobile menu - only shown to admin users */}
               {isSignedIn && (
                 <AdminOnly>
-                  <Disclosure.Button
-                    as={Link}
-                    href="/admin"
-                    className={classNames(
-                      pathname.startsWith('/admin')
-                        ? 'border-indigo-500 bg-indigo-50 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300'
-                        : 'border-transparent text-gray-600 hover:border-gray-300 hover:bg-gray-50 hover:text-gray-800 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-300',
-                      'block border-l-4 py-2 pl-3 pr-4 text-base font-medium'
-                    )}
-                  >
-                    admin
-                  </Disclosure.Button>
+                  {adminNavigation.map((item) => (
+                    <Disclosure.Button
+                      key={item.name}
+                      as={Link}
+                      href={item.href}
+                      className={classNames(
+                        pathname.startsWith(item.href)
+                          ? 'border-indigo-500 bg-indigo-50 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300'
+                          : 'border-transparent text-gray-600 hover:border-gray-300 hover:bg-gray-50 hover:text-gray-800 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-300',
+                        'block border-l-4 py-2 pl-3 pr-4 text-base font-medium'
+                      )}
+                    >
+                      {item.name}
+                    </Disclosure.Button>
+                  ))}
                 </AdminOnly>
               )}
             </div>

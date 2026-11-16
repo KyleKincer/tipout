@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { usesConvex, viaConvex } from '@/lib/convexServer'
+import { api } from '@convex/_generated/api'
 import { prisma } from '@/lib/prisma'
 import { errorResponse, HttpError, requireUser } from '@/lib/apiAuth'
 import { buildReport } from '@/lib/reportData'
@@ -9,6 +11,10 @@ import { isDateOnly } from '@/utils/roleVersions'
  * its own date, and days inside a locked pay period return the saved, as-paid results.
  */
 export async function GET(request: NextRequest) {
+  if (usesConvex()) {
+    const p = request.nextUrl.searchParams
+    return viaConvex('Error generating report data', c => c.query(api.reports.get, { startDate: p.get('startDate') ?? '', endDate: p.get('endDate') ?? '' }))
+  }
   try {
     await requireUser()
     const startDate = request.nextUrl.searchParams.get('startDate')

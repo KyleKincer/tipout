@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server'
+import { usesConvex, viaConvex } from '@/lib/convexServer'
+import { api } from '@convex/_generated/api'
 import { prisma } from '@/lib/prisma'
 import { errorResponse, HttpError, requireAdmin, requireUser } from '@/lib/apiAuth'
 import { audit } from '@/lib/audit'
@@ -16,6 +18,10 @@ async function findRole(id: string) {
 
 /** A role with its full settings history. */
 export async function GET(_request: Request, { params }: Params) {
+  if (usesConvex()) {
+    const { id } = await params
+    return viaConvex('Failed to fetch role', c => c.query(api.roles.get, { id }))
+  }
   try {
     await requireUser()
     const { id } = await params
@@ -49,6 +55,13 @@ export async function GET(_request: Request, { params }: Params) {
 
 /** Rename or archive a role. Settings changes go through /versions so they stay dated. */
 export async function PATCH(request: Request, { params }: Params) {
+  if (usesConvex()) {
+    const { id } = await params
+    const body = await request.json()
+    return viaConvex('Failed to update role', c => c.mutation(api.roles.update, {
+      id, ...(typeof body.name === 'string' ? { name: body.name } : {}), ...(typeof body.active === 'boolean' ? { active: body.active } : {}),
+    }))
+  }
   try {
     const actor = await requireAdmin()
     const { id } = await params
@@ -76,6 +89,10 @@ export async function PATCH(request: Request, { params }: Params) {
 
 /** Delete a role that was never used. Roles with shifts are archived instead, so history keeps them. */
 export async function DELETE(_request: Request, { params }: Params) {
+  if (usesConvex()) {
+    const { id } = await params
+    return viaConvex('Failed to delete role', c => c.mutation(api.roles.remove, { id }))
+  }
   try {
     const actor = await requireAdmin()
     const { id } = await params

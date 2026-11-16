@@ -1,6 +1,6 @@
 import { parseISO, isAfter, isBefore } from 'date-fns'
 import { calculateDailyReport } from './reportCalculations'
-import type { RoleConfig, Shift, TipoutType } from '@/types/reports'
+import type { RoleConfig, Shift, TipoutType } from '../types/reports'
 
 export type RateRole = { name: string; basePayRate?: number; configs: RoleConfig[]; tipPoolGroup?: string | null }
 

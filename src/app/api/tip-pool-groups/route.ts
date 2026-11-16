@@ -1,9 +1,12 @@
 import { NextResponse } from 'next/server'
+import { usesConvex, viaConvex } from '@/lib/convexServer'
+import { api } from '@convex/_generated/api'
 import { prisma } from '@/lib/prisma'
 import { errorResponse, requireUser } from '@/lib/apiAuth'
 
 /** Pool names and tipout-sharing group names used by any role, for the settings form's suggestions. */
 export async function GET() {
+  if (usesConvex()) return viaConvex('Error fetching tip pool groups', c => c.query(api.roles.groups, {}))
   try {
     await requireUser()
     const [pools, groups] = await Promise.all([

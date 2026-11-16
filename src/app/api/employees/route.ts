@@ -1,9 +1,12 @@
 import { NextResponse } from 'next/server'
+import { usesConvex, viaConvex } from '@/lib/convexServer'
+import { api } from '@convex/_generated/api'
 import { prisma } from '@/lib/prisma'
 import { errorResponse, HttpError, requireAdmin, requireUser } from '@/lib/apiAuth'
 import { audit } from '@/lib/audit'
 
 export async function GET() {
+  if (usesConvex()) return viaConvex('Failed to fetch employees', c => c.query(api.employees.list, {}))
   try {
     await requireUser()
     const employees = await prisma.employee.findMany({ include: { defaultRole: true }, orderBy: { name: 'asc' } })
@@ -17,6 +20,10 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  if (usesConvex()) {
+    const body = await request.json()
+    return viaConvex('Failed to create employee', c => c.mutation(api.employees.create, { name: String(body.name ?? '') }))
+  }
   try {
     const actor = await requireAdmin()
     const body = await request.json()

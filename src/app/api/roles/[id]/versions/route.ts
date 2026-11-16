@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server'
+import { usesConvex, viaConvex } from '@/lib/convexServer'
+import { api } from '@convex/_generated/api'
 import { prisma } from '@/lib/prisma'
 import { errorResponse, HttpError, requireAdmin } from '@/lib/apiAuth'
 import { applyVersionChange, planForRole, undoLatestChange } from '@/lib/roleWrites'
@@ -18,6 +20,14 @@ async function findRole(id: string) {
  * entered it would recalculate. Saving a change that recalculates entered shifts needs `confirmAffected: true`.
  */
 export async function POST(request: Request, { params }: Params) {
+  if (usesConvex()) {
+    const { id } = await params
+    const body = await request.json()
+    const args = { id, effectiveFrom: String(body.effectiveFrom ?? ''), settings: parseSettings(body.settings) }
+    return viaConvex('Failed to save role settings', c => body.dryRun
+      ? c.query(api.roles.planChange, args)
+      : c.mutation(api.roles.changeSettings, { ...args, note: body.note ?? null, confirmAffected: body.confirmAffected === true }))
+  }
   try {
     const actor = await requireAdmin()
     const { id } = await params
@@ -41,6 +51,11 @@ export async function POST(request: Request, { params }: Params) {
 
 /** Undo the most recent settings change. ?confirm=1 is needed when that recalculates entered shifts. */
 export async function DELETE(request: Request, { params }: Params) {
+  if (usesConvex()) {
+    const { id } = await params
+    const confirmAffected = new URL(request.url).searchParams.get('confirm') === '1'
+    return viaConvex('Failed to undo the settings change', c => c.mutation(api.roles.undoLatest, { id, confirmAffected }))
+  }
   try {
     const actor = await requireAdmin()
     const { id } = await params

@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server'
+import { usesConvex, viaConvex } from '@/lib/convexServer'
+import { api } from '@convex/_generated/api'
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { errorResponse, HttpError, requireAdmin } from '@/lib/apiAuth'
@@ -13,6 +15,15 @@ type Params = { params: Promise<{ id: string }> }
  * { action: 'unlock', reason } reopens it; the saved results are kept in the change log.
  */
 export async function POST(request: Request, { params }: Params) {
+  if (usesConvex()) {
+    const { id } = await params
+    const { action, reason } = await request.json()
+    return viaConvex('Failed to update pay period', c => {
+      if (action === 'lock') return c.mutation(api.payPeriods.lock, { id })
+      if (action === 'unlock') return c.mutation(api.payPeriods.unlock, { id, reason: typeof reason === 'string' ? reason : undefined })
+      throw new HttpError(400, 'Unknown action.')
+    })
+  }
   try {
     const actor = await requireAdmin()
     const { id } = await params
@@ -60,6 +71,10 @@ export async function POST(request: Request, { params }: Params) {
 
 /** Remove a pay period that isn't locked. */
 export async function DELETE(_request: Request, { params }: Params) {
+  if (usesConvex()) {
+    const { id } = await params
+    return viaConvex('Failed to remove pay period', c => c.mutation(api.payPeriods.remove, { id }))
+  }
   try {
     const actor = await requireAdmin()
     const { id } = await params

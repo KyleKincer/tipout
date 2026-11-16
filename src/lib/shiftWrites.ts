@@ -1,37 +1,17 @@
 import { HttpError } from './apiAuth'
 import { dbDate, loadVersions, type Db } from './roleData'
-import { isDateOnly, toDateOnly, versionOn, type DateOnly } from '@/utils/roleVersions'
+import { toDateOnly, versionOn, type DateOnly } from '@/utils/roleVersions'
+import { InputError, parseShiftInput as parseShift, type ShiftInput } from '@/utils/shiftInput'
 
-export type ShiftInput = {
-  employeeId: string
-  roleId: string
-  date: DateOnly
-  hours: number
-  cashTips: number
-  creditTips: number
-  liquorSales: number
-}
+export type { ShiftInput } from '@/utils/shiftInput'
 
-const money = (value: unknown, label: string) => {
-  const n = value === undefined || value === null || value === '' ? 0 : Number(value)
-  if (!Number.isFinite(n) || n < 0) throw new HttpError(400, `${label} must be zero or more.`)
-  return n
-}
-
-/** A shift from a request body, validated. Dates are taken as calendar days (YYYY-MM-DD). */
+/** A shift from a request body, validated; input problems become a 400. */
 export function parseShiftInput(body: Record<string, unknown>): ShiftInput {
-  const date = typeof body.date === 'string' ? body.date.slice(0, 10) : ''
-  if (!body.employeeId || !body.roleId || !isDateOnly(date)) throw new HttpError(400, 'Pick an employee, a role and a date.')
-  const hours = Number(body.hours)
-  if (!Number.isFinite(hours) || hours <= 0 || hours > 24) throw new HttpError(400, 'Hours must be more than 0 and at most 24.')
-  return {
-    employeeId: String(body.employeeId),
-    roleId: String(body.roleId),
-    date,
-    hours,
-    cashTips: money(body.cashTips, 'Cash tips'),
-    creditTips: money(body.creditTips, 'Credit tips'),
-    liquorSales: money(body.liquorSales, 'Liquor sales'),
+  try {
+    return parseShift(body)
+  } catch (error) {
+    if (error instanceof InputError) throw new HttpError(400, error.message)
+    throw error
   }
 }
 

@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server'
+import { usesConvex, viaConvex } from '@/lib/convexServer'
+import { api } from '@convex/_generated/api'
 import { prisma } from '@/lib/prisma'
 import { errorResponse, HttpError, requireAdmin, requireUser } from '@/lib/apiAuth'
 import { audit } from '@/lib/audit'
@@ -6,6 +8,10 @@ import { audit } from '@/lib/audit'
 type Params = { params: Promise<{ id: string }> }
 
 export async function GET(_request: Request, { params }: Params) {
+  if (usesConvex()) {
+    const { id } = await params
+    return viaConvex('Failed to fetch employee', c => c.query(api.employees.get, { id }))
+  }
   try {
     await requireUser()
     const { id } = await params
@@ -21,6 +27,16 @@ export async function GET(_request: Request, { params }: Params) {
 }
 
 export async function PUT(request: Request, { params }: Params) {
+  if (usesConvex()) {
+    const { id } = await params
+    const body = await request.json()
+    return viaConvex('Failed to update employee', c => c.mutation(api.employees.update, {
+      id,
+      ...(typeof body.name === 'string' ? { name: body.name } : {}),
+      ...(typeof body.active === 'boolean' ? { active: body.active } : {}),
+      ...(body.defaultRoleId !== undefined ? { defaultRoleId: body.defaultRoleId || null } : {}),
+    }))
+  }
   try {
     const actor = await requireAdmin()
     const { id } = await params
@@ -49,6 +65,10 @@ export async function PUT(request: Request, { params }: Params) {
 
 /** Delete an employee with no shifts. Anyone with shifts is marked inactive instead, so history keeps them. */
 export async function DELETE(_request: Request, { params }: Params) {
+  if (usesConvex()) {
+    const { id } = await params
+    return viaConvex('Failed to delete employee', c => c.mutation(api.employees.remove, { id }))
+  }
   try {
     const actor = await requireAdmin()
     const { id } = await params
